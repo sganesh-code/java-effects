@@ -1,6 +1,8 @@
 package io.effects.recipes.reservable;
 
 import io.effects.Either;
+import io.effects.recipes.ports.reservable.*;
+import io.effects.recipes.adapters.reservable.*;
 import io.effects.recipes.reservable.healthcare.AppointmentSlot;
 import io.effects.recipes.reservable.ecommerce.InventoryUnit;
 import org.junit.jupiter.api.Test;

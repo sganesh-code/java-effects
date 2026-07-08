@@ -1,4 +1,4 @@
-package io.effects.recipes.approvable;
+package io.effects.recipes.ports.approvable;
 
 import java.time.Instant;
 import java.util.Objects;
@@ -6,7 +6,7 @@ import java.util.Objects;
 /**
  * Event published when a request is successfully and fully approved.
  */
-final class RequestApproved implements ApprovalEvent {
+public final class RequestApproved implements ApprovalEvent {
     private final String requestId;
     private final String approverId;
     private final String comment;

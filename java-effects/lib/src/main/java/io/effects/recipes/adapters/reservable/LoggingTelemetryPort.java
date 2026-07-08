@@ -1,11 +1,12 @@
-package io.effects.recipes.reservable;
+package io.effects.recipes.adapters.reservable;
 
 import io.effects.IO;
+import io.effects.recipes.ports.reservable.TelemetryPort;
 
 /**
  * A telemetry adapter that logs operations to stdout for local debugging and validation.
  */
-final class LoggingTelemetryPort implements TelemetryPort {
+public final class LoggingTelemetryPort implements TelemetryPort {
 
     @Override
     public IO<Void> recordHoldDuration(String resourceId, long durationMs) {

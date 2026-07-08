@@ -1,6 +1,8 @@
-package io.effects.recipes.approvable;
+package io.effects.recipes.adapters.approvable;
 
 import io.effects.IO;
+import io.effects.recipes.ports.approvable.ApprovalEvent;
+import io.effects.recipes.ports.approvable.ApprovalEventPublisher;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -8,7 +10,7 @@ import java.util.List;
 /**
  * An in-memory, thread-safe implementation of ApprovalEventPublisher for testing and auditing.
  */
-final class InMemoryApprovalEventPublisher implements ApprovalEventPublisher {
+public final class InMemoryApprovalEventPublisher implements ApprovalEventPublisher {
     private final List<ApprovalEvent> events = Collections.synchronizedList(new ArrayList<>());
 
     @Override

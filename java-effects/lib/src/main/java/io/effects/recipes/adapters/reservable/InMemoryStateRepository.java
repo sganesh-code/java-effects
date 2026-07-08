@@ -1,6 +1,9 @@
-package io.effects.recipes.reservable;
+package io.effects.recipes.adapters.reservable;
 
 import io.effects.IO;
+import io.effects.recipes.reservable.Hold;
+import io.effects.recipes.reservable.ResourceLedger;
+import io.effects.recipes.ports.reservable.StateRepository;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -8,7 +11,7 @@ import java.util.concurrent.ConcurrentMap;
 /**
  * An in-memory, thread-safe implementation of StateRepository for testing and local use.
  */
-final class InMemoryStateRepository implements StateRepository {
+public final class InMemoryStateRepository implements StateRepository {
     private final ConcurrentMap<String, ResourceLedger> ledgers = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, Hold> holds = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, String> holdToResourceMapping = new ConcurrentHashMap<>();

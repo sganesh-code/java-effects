@@ -1,6 +1,7 @@
-package io.effects.recipes.approvable;
+package io.effects.recipes.ports.approvable;
 
 import io.effects.IO;
+import io.effects.recipes.approvable.ApprovalRecord;
 import java.util.Optional;
 
 /**

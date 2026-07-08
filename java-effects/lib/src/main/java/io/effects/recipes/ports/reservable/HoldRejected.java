@@ -1,11 +1,11 @@
-package io.effects.recipes.reservable;
+package io.effects.recipes.ports.reservable;
 
 import java.time.Instant;
 
 /**
  * Event published when a resource hold request is rejected.
  */
-record HoldRejected(
+public record HoldRejected(
     String resourceId,
     String actorId,
     int quantity,

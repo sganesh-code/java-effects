@@ -1,11 +1,12 @@
-package io.effects.recipes.reservable;
+package io.effects.recipes.adapters.reservable;
 
 import io.effects.IO;
+import io.effects.recipes.ports.reservable.TelemetryPort;
 
 /**
  * A telemetry adapter that discards all logs and metrics.
  */
-final class NoOpTelemetryPort implements TelemetryPort {
+public final class NoOpTelemetryPort implements TelemetryPort {
 
     @Override
     public IO<Void> recordHoldDuration(String resourceId, long durationMs) {

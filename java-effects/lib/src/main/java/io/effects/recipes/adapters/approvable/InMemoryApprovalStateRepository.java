@@ -1,6 +1,8 @@
-package io.effects.recipes.approvable;
+package io.effects.recipes.adapters.approvable;
 
 import io.effects.IO;
+import io.effects.recipes.approvable.ApprovalRecord;
+import io.effects.recipes.ports.approvable.ApprovalStateRepository;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -8,7 +10,7 @@ import java.util.concurrent.ConcurrentMap;
 /**
  * An in-memory, thread-safe implementation of ApprovalStateRepository for testing and local use.
  */
-final class InMemoryApprovalStateRepository implements ApprovalStateRepository {
+public final class InMemoryApprovalStateRepository implements ApprovalStateRepository {
     private final ConcurrentMap<String, ApprovalRecord> records = new ConcurrentHashMap<>();
 
     @Override

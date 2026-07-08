@@ -1,11 +1,12 @@
-package io.effects.recipes.approvable;
+package io.effects.recipes.adapters.approvable;
 
 import io.effects.IO;
+import io.effects.recipes.ports.approvable.ApprovalTelemetryPort;
 
 /**
  * A telemetry adapter that logs operations to stdout for local debugging and validation.
  */
-final class LoggingApprovalTelemetryPort implements ApprovalTelemetryPort {
+public final class LoggingApprovalTelemetryPort implements ApprovalTelemetryPort {
 
     @Override
     public IO<Void> recordSubmissionSuccess(String requestId) {

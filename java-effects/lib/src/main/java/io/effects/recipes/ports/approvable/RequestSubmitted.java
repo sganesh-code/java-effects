@@ -1,4 +1,4 @@
-package io.effects.recipes.approvable;
+package io.effects.recipes.ports.approvable;
 
 import java.time.Instant;
 import java.util.Objects;
@@ -6,7 +6,7 @@ import java.util.Objects;
 /**
  * Event published when a request is submitted and enters the pending or escalated state.
  */
-final class RequestSubmitted implements ApprovalEvent {
+public final class RequestSubmitted implements ApprovalEvent {
     private final String requestId;
     private final String initiatorId;
     private final String requiredAuthority;

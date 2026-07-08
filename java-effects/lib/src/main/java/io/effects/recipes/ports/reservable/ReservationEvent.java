@@ -1,4 +1,4 @@
-package io.effects.recipes.reservable;
+package io.effects.recipes.ports.reservable;
 
 import java.time.Instant;
 

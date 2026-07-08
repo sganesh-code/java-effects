@@ -1,4 +1,4 @@
-package io.effects.recipes.approvable;
+package io.effects.recipes.ports.approvable;
 
 import java.time.Instant;
 import java.util.Objects;
@@ -6,7 +6,7 @@ import java.util.Objects;
 /**
  * Event published when a request is escalated to a higher required authority.
  */
-final class RequestEscalated implements ApprovalEvent {
+public final class RequestEscalated implements ApprovalEvent {
     private final String requestId;
     private final String escalatorId;
     private final String targetAuthority;

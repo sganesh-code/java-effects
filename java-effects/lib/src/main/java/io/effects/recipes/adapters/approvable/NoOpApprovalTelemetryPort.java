@@ -1,11 +1,12 @@
-package io.effects.recipes.approvable;
+package io.effects.recipes.adapters.approvable;
 
 import io.effects.IO;
+import io.effects.recipes.ports.approvable.ApprovalTelemetryPort;
 
 /**
  * A telemetry adapter that discards all metrics and logs.
  */
-final class NoOpApprovalTelemetryPort implements ApprovalTelemetryPort {
+public final class NoOpApprovalTelemetryPort implements ApprovalTelemetryPort {
 
     @Override
     public IO<Void> recordSubmissionSuccess(String requestId) {

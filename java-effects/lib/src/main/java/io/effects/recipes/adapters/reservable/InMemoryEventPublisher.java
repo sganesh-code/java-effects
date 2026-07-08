@@ -1,6 +1,8 @@
-package io.effects.recipes.reservable;
+package io.effects.recipes.adapters.reservable;
 
 import io.effects.IO;
+import io.effects.recipes.ports.reservable.EventPublisher;
+import io.effects.recipes.ports.reservable.ReservationEvent;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -8,7 +10,7 @@ import java.util.List;
 /**
  * An in-memory, thread-safe implementation of EventPublisher for testing and auditing.
  */
-final class InMemoryEventPublisher implements EventPublisher {
+public final class InMemoryEventPublisher implements EventPublisher {
     private final List<ReservationEvent> events = Collections.synchronizedList(new ArrayList<>());
 
     @Override

@@ -2,6 +2,8 @@ package io.effects.recipes.approvable;
 
 import io.effects.Either;
 import io.effects.IO;
+import io.effects.recipes.ports.approvable.*;
+import io.effects.recipes.adapters.approvable.*;
 import io.effects.recipes.approvable.ecommerce.ExpenseReport;
 import io.effects.recipes.approvable.healthcare.MedicalProcedureRequest;
 import org.junit.jupiter.api.Test;

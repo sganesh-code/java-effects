@@ -1,11 +1,11 @@
-package io.effects.recipes.reservable;
+package io.effects.recipes.ports.reservable;
 
 import java.time.Instant;
 
 /**
- * Event published when a resource hold is released.
+ * Event published when a resource hold expires.
  */
-record HoldReleased(
+public record HoldExpired(
     String holdId,
     String resourceId,
     Instant occurredAt
