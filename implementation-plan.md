@@ -1,0 +1,68 @@
+# Implementation Plan: RECIPE-002 - Configure Ports & Adapters for ReservationProcess
+
+- [x] **🎟️ RECIPE-002: Configure Ports and Adapters to Inject Infrastructure at Runtime**
+  - **Description:** 
+    Currently, the `ReservationProcess` manages state (holds, resources, ledgers, and mappings) in-memory using concurrent maps. To allow plugging in database-backed state management, event-driven orchestration (e.g. Kafka or outbox publishing), and telemetry/logging systems at runtime, we must refactor `ReservationProcess` to separate the core recipe collaboration process from its infrastructure. In accordance with the project's design philosophy (`@java-effects/docs/oo_object_recipe_research_notes.md`), we will introduce a clean Ports & Adapters (Hexagonal) architecture. We will define generic interfaces (Ports) representing side-effecting operations and provide robust, fully backwards-compatible in-memory Adapters so that all existing tests and behaviors continue to function seamlessly.
+  - **Scope:**
+    - **In scope:**
+      - **Ports (Generic Interfaces):** Define functional/object contracts for state storage, event publishing, and telemetry tracking, all returning lazy monadic `IO` results.
+      - **Events:** Define immutable event records representing lifecycle facts of the reservation recipe (HoldCreated, HoldRejected, HoldConfirmed, HoldReleased, HoldExpired).
+      - **In-Memory Adapters:** Standard implementations of the defined Ports using thread-safe, in-memory structures to ensure local testing and defaults continue to work.
+      - **Refactored `ReservationProcess`:** Update the coordinator to accept injected Ports at construction time, using functional monadic composition (flatMap/map) to sequence lazy effects instead of in-memory side effects inside `IO.delay`.
+      - **Expanded Test Coverage:** Add dedicated tests to verify that injected ports successfully capture states, events, and telemetry logs at runtime.
+    - **Out of scope:**
+      - Changing the synchronous, pure, and stateless nature of domain objects (`ReservableResource`, `ResourceLedger`, `Hold`, `Reservation`).
+      - Writing actual production SQL DB/Kafka/OpenTelemetry adapters (only the architectural Ports and in-memory/logging Adapters are in scope).
+  - **Implementation Tasks:**
+    - [x] **Investigate:** Review existing code in `@java-effects/lib/src/main/java/io/effects/recipes/reservable/ReservationProcess.java` and design principles in `@java-effects/docs/oo_object_recipe_research_notes.md` (specifically Section 5, 6.3, 8.10, and 11) for mapping FP effects to OO capabilities.
+      - *Analyzed ReservationProcess in-memory storage structure and cross-referenced Sections 5, 6.3, 8.10, and 11 of the research notes on separation of effects via capability objects (ports).*
+    - [x] **Implement Ports:** Define the Port interfaces under `@java-effects/lib/src/main/java/io/effects/recipes/reservable/`:
+      - `StateRepository.java`: Defines methods to store/retrieve resource ledgers, holds, and mappings, returning monadic `IO` values:
+        - `IO<Void> saveLedger(String resourceId, ResourceLedger ledger)`
+        - `IO<Optional<ResourceLedger>> findLedger(String resourceId)`
+        - `IO<Void> saveHold(Hold hold, String resourceId)`
+        - `IO<Optional<Hold>> findHold(String holdId)`
+        - `IO<Optional<String>> findResourceIdForHold(String holdId)`
+        - `IO<Void> removeHold(String holdId)`
+      - `EventPublisher.java`: Defines the contract for publishing domain lifecycle facts:
+        - `IO<Void> publish(ReservationEvent event)`
+      - `TelemetryPort.java`: Defines domain-specific tracking for latency and operations:
+        - `IO<Void> recordHoldDuration(String resourceId, long durationMs)`
+        - `IO<Void> recordHoldSuccess(String resourceId)`
+        - `IO<Void> recordHoldFailure(String resourceId, String reason)`
+        - `IO<Void> recordConfirmationSuccess(String resourceId)`
+        - `IO<Void> recordConfirmationFailure(String resourceId, String reason)`
+      - *Successfully created the StateRepository, EventPublisher, and TelemetryPort port interfaces with monadic lazy IO-wrapped side effects.*
+    - [x] **Implement Events:** Under `@java-effects/lib/src/main/java/io/effects/recipes/reservable/`:
+      - Create `ReservationEvent.java` as a shared interface or record base representing historical facts:
+        - `Instant occurredAt()`
+        - `String resourceId()`
+      - Create immutable records representing specific facts:
+        - `HoldCreated.java` (fields: `holdId`, `resourceId`, `actorId`, `quantity`, `expiresAt`, `occurredAt`)
+        - `HoldRejected.java` (fields: `resourceId`, `actorId`, `quantity`, `reason`, `occurredAt`)
+        - `HoldConfirmed.java` (fields: `holdId`, `reservationId`, `resourceId`, `actorId`, `quantity`, `occurredAt`)
+        - `HoldReleased.java` (fields: `holdId`, `resourceId`, `occurredAt`)
+        - `HoldExpired.java` (fields: `holdId`, `resourceId`, `occurredAt`)
+      - *Implemented immutable ReservationEvent interface and concrete event records using native Java records (naturally getter/setter free).*
+    - [x] **Implement Default Adapters:** Under `@java-effects/lib/src/main/java/io/effects/recipes/reservable/`:
+      - `InMemoryStateRepository.java`: Encapsulates the current concurrent maps for holds and ledgers.
+      - `InMemoryEventPublisher.java`: Keeps an append-only list of published events (excellent for asserting assertions in testing).
+      - `NoOpTelemetryPort.java`: Empty implementations returning `IO.pure(null)`.
+      - `LoggingTelemetryPort.java`: Telemetry tracker printing metrics and duration logs using standard stdout logging (highly useful for local validation).
+      - *Created standard, thread-safe in-memory and stdout-logging adapters for all ports.*
+    - [x] **Refactor Coordinator:** Update `@java-effects/lib/src/main/java/io/effects/recipes/reservable/ReservationProcess.java`:
+      - Expose a constructor allowing injection of `StateRepository`, `EventPublisher`, and `TelemetryPort`.
+      - Expose a default zero-argument constructor that chains to the injected one using the `InMemoryStateRepository`, `InMemoryEventPublisher`, and `NoOpTelemetryPort` to maintain 100% backward compatibility.
+      - Refactor `add`, `hold`, `confirm`, `release`, and `expire` to fetch and store state, publish events, and measure durations entirely using monadic sequencing (`flatMap` and `map` on `IO`), ensuring no raw in-memory side effects are done outside of the lazy monad pipelines.
+      - *Refactored ReservationProcess coordinator to be fully dependency injected and composed functionally via lazy monadic operations.*
+    - [x] **Test:** Update `@java-effects/lib/src/test/java/io/effects/recipes/reservable/ReservationRecipeTest.java`:
+      - Ensure all existing tests pass unchanged with the refactored default `ReservationProcess`.
+      - Add a new comprehensive integration test case verifying dependency injection at runtime:
+        - Mock or use the `InMemoryEventPublisher` and `InMemoryStateRepository` directly.
+        - Assert that when `hold` and `confirm` are invoked:
+          1. The state is correctly persisted to the `StateRepository` (not a local map).
+          2. Appropriate `HoldCreated` and `HoldConfirmed` events are published to the `EventPublisher`.
+          3. Succeeded metric events are recorded via the `TelemetryPort`.
+      - *Added a new integration test validating that injecting custom state repositories, event publishers, and telemetry ports at runtime functions flawlessly and correctly captures domain events and performance metrics.*
+    - [x] **Verify:** Run standard Gradle tests `./gradlew test` to ensure both backwards compatibility and new ports/adapters integration compile cleanly and pass successfully.
+      - *Executed ./gradlew test and confirmed all existing and new ports and adapters tests pass successfully.*
