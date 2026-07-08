@@ -1,15 +1,15 @@
-package io.effects.recipes.ports.reservable;
+package io.effects.recipes.reservable;
 
 import java.time.Instant;
 
 /**
- * Event published when a resource hold is successfully created.
+ * Event published when a resource hold is successfully confirmed.
  */
-public record HoldCreated(
+public record HoldConfirmed(
     String holdId,
+    String reservationId,
     String resourceId,
     String actorId,
     int quantity,
-    Instant expiresAt,
     Instant occurredAt
 ) implements ReservationEvent {}

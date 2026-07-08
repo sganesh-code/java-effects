@@ -1,4 +1,4 @@
-package io.effects.recipes.ports.approvable;
+package io.effects.recipes.approvable;
 
 import java.time.Instant;
 

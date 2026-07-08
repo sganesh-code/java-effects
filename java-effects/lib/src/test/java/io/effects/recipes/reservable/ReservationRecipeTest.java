@@ -6,7 +6,6 @@ import io.effects.ports.StateRepository;
 import io.effects.ports.TelemetryPort;
 import io.effects.adapters.InMemoryEventPublisher;
 import io.effects.adapters.InMemoryStateRepository;
-import io.effects.recipes.ports.reservable.*;
 import io.effects.recipes.reservable.healthcare.AppointmentSlot;
 import io.effects.recipes.reservable.ecommerce.InventoryUnit;
 import org.junit.jupiter.api.Test;
