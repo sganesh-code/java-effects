@@ -59,8 +59,9 @@ public final class ApprovalProcess {
     /**
      * Evaluates initial submission and saves/publishes.
      */
-    public IO<Either<String, ApprovalRecord>> submit(String requestId, Instant now) {
+    public IO<Either<String, ApprovalRecord>> submit(String requestId, String initiatorId, Instant now) {
         Objects.requireNonNull(requestId);
+        Objects.requireNonNull(initiatorId);
         Objects.requireNonNull(now);
 
         ApprovableRequest request = requests.get(requestId);
@@ -79,14 +80,14 @@ public final class ApprovalProcess {
                 InitialAssessment assessment = request.evaluateInitialSubmission(now);
                 ApprovalRecord record = new ApprovalRecord(
                     requestId,
-                    request.initiatorId(),
+                    initiatorId,
                     Status.PENDING,
                     null
                 );
 
                 ApprovalDecision submitDecision = new ApprovalDecision(
                     UUID.randomUUID().toString(),
-                    request.initiatorId(),
+                    initiatorId,
                     "INITIATOR",
                     DecisionType.APPROVE,
                     "Submitted for approval",
@@ -96,9 +97,9 @@ public final class ApprovalProcess {
 
                 ApprovalEvent event;
                 if (record.status() == Status.APPROVED) {
-                    event = new RequestApproved(requestId, request.initiatorId(), "AUTO_APPROVED", now);
+                    event = new RequestApproved(requestId, initiatorId, "AUTO_APPROVED", now);
                 } else {
-                    event = new RequestSubmitted(requestId, request.initiatorId(), record.requiredAuthority(), now);
+                    event = new RequestSubmitted(requestId, initiatorId, record.requiredAuthority(), now);
                 }
 
                 return repository.saveRecord(record)

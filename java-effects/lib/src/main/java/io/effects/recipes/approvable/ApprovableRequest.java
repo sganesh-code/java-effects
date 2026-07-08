@@ -14,16 +14,6 @@ import java.time.Instant;
 public interface ApprovableRequest {
 
     /**
-     * Unique identifier of the request.
-     */
-    String requestId();
-
-    /**
-     * Who initiated this request.
-     */
-    String initiatorId();
-
-    /**
      * Determines the initial approval status and required authority for this request.
      * Some requests might be auto-approved, while others require a specific level of authority.
      */
@@ -34,7 +24,7 @@ public interface ApprovableRequest {
      * Returns the next status and next required authority on the Right, or a validation/rejection error message on the Left.
      */
     Either<String, NextStep> evaluateDecision(
-        ApprovalRecord approvalRecord,
+        ApprovalRecord record, 
         String approverId, 
         String approverRole, 
         DecisionType decisionType, 

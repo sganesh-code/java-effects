@@ -7,48 +7,41 @@ import java.util.Objects;
 
 /**
  * Healthcare domain representation of a medical procedure approval request.
- * Completely stateless, synchronous, and pure, delegating audit-trail state analysis
- * to the record provided.
+ * Grounded in Alan Kay's OOP vision, it exposes no identity or initiator getters to the system,
+ * relying entirely on behavior evaluation messages.
  */
 public final class MedicalProcedureRequest implements ApprovableRequest {
-    private final String procedureId;
-    private final String patientId;
     private final String procedureName;
     private final boolean isSurgical;
 
-    public MedicalProcedureRequest(String procedureId, String patientId, String procedureName, boolean isSurgical) {
-        this.procedureId = Objects.requireNonNull(procedureId);
-        this.patientId = Objects.requireNonNull(patientId);
+    public MedicalProcedureRequest(String procedureName, boolean isSurgical) {
         this.procedureName = Objects.requireNonNull(procedureName);
         this.isSurgical = isSurgical;
     }
 
-    @Override
-    public String requestId() { return procedureId; }
+    public String procedureName() { return procedureName; }
 
-    @Override
-    public String initiatorId() { return patientId; }
+    public boolean isSurgical() { return isSurgical; }
 
     @Override
     public InitialAssessment evaluateInitialSubmission(Instant now) {
-        // All medical requests start by requiring a Clinician's diagnostic verification.
         return new InitialAssessment(Status.PENDING, "CLINICIAN");
     }
 
     @Override
     public Either<String, NextStep> evaluateDecision(
-        ApprovalRecord approvalRecord,
+        ApprovalRecord record, 
         String approverId, 
         String approverRole, 
         DecisionType decisionType, 
         String comment, 
         Instant now
     ) {
-        if (approvalRecord.isTerminal()) {
+        if (record.isTerminal()) {
             return Either.left("Medical procedure request has already reached a terminal state");
         }
 
-        String required = approvalRecord.requiredAuthority();
+        String required = record.requiredAuthority();
         if (required != null && !required.equalsIgnoreCase(approverRole)) {
             return Either.left("Insufficient authority: required role is " + required + " but got " + approverRole);
         }
@@ -67,21 +60,17 @@ public final class MedicalProcedureRequest implements ApprovableRequest {
         // DecisionType.APPROVE
         if ("CLINICIAN".equalsIgnoreCase(approverRole)) {
             if (isSurgical) {
-                // Dual approval step 1: clinician verifies, escalates to chief of surgery
                 return Either.right(new NextStep(Status.PENDING, "CHIEF_OF_SURGERY"));
             } else {
-                // Routine/non-surgical procedure: single approval is sufficient
                 return Either.right(new NextStep(Status.APPROVED, null));
             }
         }
 
         if ("CHIEF_OF_SURGERY".equalsIgnoreCase(approverRole)) {
-            // Dual approval step 2: Chief of Surgery approves, needs insurance rep to finalize
             return Either.right(new NextStep(Status.PENDING, "INSURANCE_REP"));
         }
 
         if ("INSURANCE_REP".equalsIgnoreCase(approverRole)) {
-            // Dual approval step 3: Insurance representative authorizes
             return Either.right(new NextStep(Status.APPROVED, null));
         }
 

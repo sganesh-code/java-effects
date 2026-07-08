@@ -17,14 +17,14 @@ class ApprovalRecipeTest {
     @Test
     void testExpenseReportAutoApproval() {
         ApprovalProcess process = new ApprovalProcess();
-        ExpenseReport report = new ExpenseReport("rep-001", "emp-A", 45.50, "Team lunch");
+        ExpenseReport report = new ExpenseReport(45.50, "Team lunch");
         
         process.register("rep-001", report).unsafeRunSync();
 
         Instant now = Instant.parse("2026-07-08T14:00:00Z");
 
         // Submit -> Auto-approved since amount < 100
-        Either<String, ApprovalRecord> submitResult = process.submit("rep-001", now).unsafeRunSync();
+        Either<String, ApprovalRecord> submitResult = process.submit("rep-001", "emp-A", now).unsafeRunSync();
         assertTrue(submitResult.isRight());
         ApprovalRecord record = submitResult.getRight();
 
@@ -47,13 +47,13 @@ class ApprovalRecipeTest {
         InMemoryApprovalEventPublisher publisher = new InMemoryApprovalEventPublisher();
         ApprovalProcess process = new ApprovalProcess(repo, publisher, new NoOpApprovalTelemetryPort());
 
-        ExpenseReport report = new ExpenseReport("rep-002", "emp-B", 450.00, "Developer Monitor");
+        ExpenseReport report = new ExpenseReport(450.00, "Developer Monitor");
         process.register("rep-002", report).unsafeRunSync();
 
         Instant t0 = Instant.parse("2026-07-08T14:00:00Z");
 
         // Submit -> Pending manager
-        Either<String, ApprovalRecord> submitResult = process.submit("rep-002", t0).unsafeRunSync();
+        Either<String, ApprovalRecord> submitResult = process.submit("rep-002", "emp-B", t0).unsafeRunSync();
         assertTrue(submitResult.isRight());
         ApprovalRecord record = submitResult.getRight();
 
@@ -85,12 +85,12 @@ class ApprovalRecipeTest {
     @Test
     void testExpenseReportEscalationAndAuditPreservation() {
         ApprovalProcess process = new ApprovalProcess();
-        ExpenseReport report = new ExpenseReport("rep-003", "emp-C", 850.00, "Client Dinner");
+        ExpenseReport report = new ExpenseReport(850.00, "Client Dinner");
         process.register("rep-003", report).unsafeRunSync();
 
         Instant t0 = Instant.parse("2026-07-08T15:00:00Z");
 
-        process.submit("rep-003", t0).unsafeRunSync();
+        process.submit("rep-003", "emp-C", t0).unsafeRunSync();
 
         // Escalated by Manager to VP
         Either<String, ApprovalRecord> escalateResult = process.escalate("rep-003", "mgr-B", "MANAGER", "VP", "Requires higher level validation", t0.plusSeconds(30)).unsafeRunSync();
@@ -127,13 +127,13 @@ class ApprovalRecipeTest {
     @Test
     void testHealthcareRoutineProcedureFlow() {
         ApprovalProcess process = new ApprovalProcess();
-        MedicalProcedureRequest request = new MedicalProcedureRequest("med-001", "pat-A", "Standard Blood Draw", false);
+        MedicalProcedureRequest request = new MedicalProcedureRequest("Standard Blood Draw", false);
         process.register("med-001", request).unsafeRunSync();
 
         Instant t0 = Instant.parse("2026-07-08T16:00:00Z");
 
         // Submit -> Requires Clinician
-        Either<String, ApprovalRecord> submitResult = process.submit("med-001", t0).unsafeRunSync();
+        Either<String, ApprovalRecord> submitResult = process.submit("med-001", "pat-A", t0).unsafeRunSync();
         assertTrue(submitResult.isRight());
         assertEquals("CLINICIAN", submitResult.getRight().requiredAuthority());
 
@@ -152,13 +152,13 @@ class ApprovalRecipeTest {
         InMemoryApprovalEventPublisher publisher = new InMemoryApprovalEventPublisher();
         ApprovalProcess process = new ApprovalProcess(new InMemoryApprovalStateRepository(), publisher, new NoOpApprovalTelemetryPort());
         
-        MedicalProcedureRequest request = new MedicalProcedureRequest("med-002", "pat-B", "Open Heart Surgery", true);
+        MedicalProcedureRequest request = new MedicalProcedureRequest("Open Heart Surgery", true);
         process.register("med-002", request).unsafeRunSync();
 
         Instant t0 = Instant.parse("2026-07-08T16:00:00Z");
 
         // Submit -> Clinician required
-        process.submit("med-002", t0).unsafeRunSync();
+        process.submit("med-002", "pat-B", t0).unsafeRunSync();
 
         // 1. Clinician approves -> Surgical = true, so transitions to CHIEF_OF_SURGERY required
         Either<String, ApprovalRecord> clinicianResult = process.approve("med-002", "doc-A", "CLINICIAN", "Surgical triage approved", t0.plusSeconds(5)).unsafeRunSync();
@@ -190,12 +190,12 @@ class ApprovalRecipeTest {
     @Test
     void testWorkflowInvariantsAndIdempotency() {
         ApprovalProcess process = new ApprovalProcess();
-        ExpenseReport report = new ExpenseReport("rep-004", "emp-D", 150.00, "Office chair");
+        ExpenseReport report = new ExpenseReport(150.00, "Office chair");
         process.register("rep-004", report).unsafeRunSync();
 
         Instant t0 = Instant.parse("2026-07-08T17:00:00Z");
 
-        process.submit("rep-004", t0).unsafeRunSync();
+        process.submit("rep-004", "emp-D", t0).unsafeRunSync();
 
         // Reject request -> Terminal state REJECTED
         Either<String, ApprovalRecord> rejectResult = process.reject("rep-004", "mgr-C", "MANAGER", "Chair too expensive", t0.plusSeconds(10)).unsafeRunSync();
@@ -255,15 +255,14 @@ class ApprovalRecipeTest {
             spy
         );
 
-        ExpenseReport report = new ExpenseReport("rep-005", "emp-E", 10.00, "Notebook");
+        ExpenseReport report = new ExpenseReport(10.00, "Notebook");
         process.register("rep-005", report).unsafeRunSync();
 
         Instant t0 = Instant.parse("2026-07-08T18:00:00Z");
 
         // Submit -> Auto-approved since < 100
-        process.submit("rep-005", t0).unsafeRunSync();
+        process.submit("rep-005", "emp-E", t0).unsafeRunSync();
 
         assertEquals(1, spy.submissions);
-        // Under auto-approval, it is fully approved inside submit, so only submit/submission telemetry is recorded.
     }
 }
