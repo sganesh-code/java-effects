@@ -4,10 +4,12 @@ import io.effects.Either;
 import io.effects.IO;
 import io.effects.ForIO;
 import io.effects.ports.EventPublisher;
+import io.effects.ports.StateRepository;
+import io.effects.ports.TelemetryPort;
 import io.effects.adapters.InMemoryEventPublisher;
+import io.effects.adapters.InMemoryStateRepository;
+import io.effects.adapters.NoOpTelemetryPort;
 import io.effects.recipes.ports.approvable.*;
-import io.effects.recipes.adapters.approvable.InMemoryApprovalStateRepository;
-import io.effects.recipes.adapters.approvable.NoOpApprovalTelemetryPort;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.Optional;
@@ -24,25 +26,25 @@ import java.util.concurrent.ConcurrentMap;
  * cancellation, and pipeline composition.
  */
 public final class ApprovalProcess {
-    private final ApprovalStateRepository repository;
+    private final StateRepository<String, ApprovalRecord> repository;
     private final EventPublisher<ApprovalEvent> publisher;
-    private final ApprovalTelemetryPort telemetry;
+    private final TelemetryPort telemetry;
     private final ConcurrentMap<String, ApprovableRequest> requests = new ConcurrentHashMap<>();
 
     /**
      * Default constructor uses the in-memory adapters for robust backward compatibility.
      */
     public ApprovalProcess() {
-        this(new InMemoryApprovalStateRepository(), new InMemoryEventPublisher<>(), new NoOpApprovalTelemetryPort());
+        this(new InMemoryStateRepository<>(), new InMemoryEventPublisher<>(), new NoOpTelemetryPort());
     }
 
     /**
      * Dependency injection constructor to configure custom ports/adapters at runtime.
      */
     public ApprovalProcess(
-        ApprovalStateRepository repository,
+        StateRepository<String, ApprovalRecord> repository,
         EventPublisher<ApprovalEvent> publisher,
-        ApprovalTelemetryPort telemetry
+        TelemetryPort telemetry
     ) {
         this.repository = Objects.requireNonNull(repository);
         this.publisher = Objects.requireNonNull(publisher);
@@ -75,7 +77,7 @@ public final class ApprovalProcess {
         }
 
         return ForIO.set(IO.delay(System::currentTimeMillis))
-            .bind(startTime -> repository.findRecord(requestId))
+            .bind(startTime -> repository.find(requestId))
             .bind((startTime, optRecord) -> {
                 if (optRecord.isPresent()) {
                     return IO.of(Either.<String, ApprovalRecord>left("Request already submitted: " + requestId));
@@ -107,10 +109,10 @@ public final class ApprovalProcess {
                     event = new RequestSubmitted(requestId, initiatorId, record.requiredAuthority(), now);
                 }
 
-                return repository.saveRecord(record)
+                return repository.save(record.requestId(), record)
                     .flatMap(v -> publisher.publish(event))
-                    .flatMap(v -> telemetry.recordSubmissionSuccess(requestId))
-                    .flatMap(v -> telemetry.recordDuration(requestId, System.currentTimeMillis() - startTime))
+                    .flatMap(v -> telemetry.recordSuccess("approvable", requestId + ":submit"))
+                    .flatMap(v -> telemetry.recordDuration("approvable", requestId, System.currentTimeMillis() - startTime))
                     .map(v -> Either.<String, ApprovalRecord>right(record));
             })
             .yield((startTime, optRecord, result) -> result);
@@ -132,7 +134,7 @@ public final class ApprovalProcess {
         }
 
         return ForIO.set(IO.delay(System::currentTimeMillis))
-            .bind(startTime -> repository.findRecord(requestId))
+            .bind(startTime -> repository.find(requestId))
             .bind((startTime, optRecord) -> {
                 if (optRecord.isEmpty()) {
                     return IO.of(Either.<String, ApprovalRecord>left("Request record not found: " + requestId));
@@ -173,10 +175,10 @@ public final class ApprovalProcess {
                     event = new RequestSubmitted(requestId, record.initiatorId(), record.requiredAuthority(), now);
                 }
 
-                return repository.saveRecord(record)
+                return repository.save(record.requestId(), record)
                     .flatMap(v -> publisher.publish(event))
-                    .flatMap(v -> telemetry.recordApprovalSuccess(requestId))
-                    .flatMap(v -> telemetry.recordDuration(requestId, System.currentTimeMillis() - startTime))
+                    .flatMap(v -> telemetry.recordSuccess("approvable", requestId + ":approve"))
+                    .flatMap(v -> telemetry.recordDuration("approvable", requestId, System.currentTimeMillis() - startTime))
                     .map(v -> Either.<String, ApprovalRecord>right(record));
             })
             .yield((startTime, optRecord, result) -> result);
@@ -198,7 +200,7 @@ public final class ApprovalProcess {
         }
 
         return ForIO.set(IO.delay(System::currentTimeMillis))
-            .bind(startTime -> repository.findRecord(requestId))
+            .bind(startTime -> repository.find(requestId))
             .bind((startTime, optRecord) -> {
                 if (optRecord.isEmpty()) {
                     return IO.of(Either.<String, ApprovalRecord>left("Request record not found: " + requestId));
@@ -233,10 +235,10 @@ public final class ApprovalProcess {
 
                 ApprovalEvent event = new RequestRejected(requestId, approverId, reason, now);
 
-                return repository.saveRecord(record)
+                return repository.save(record.requestId(), record)
                     .flatMap(v -> publisher.publish(event))
-                    .flatMap(v -> telemetry.recordRejection(requestId, reason))
-                    .flatMap(v -> telemetry.recordDuration(requestId, System.currentTimeMillis() - startTime))
+                    .flatMap(v -> telemetry.recordFailure("approvable", requestId + ":reject", reason))
+                    .flatMap(v -> telemetry.recordDuration("approvable", requestId, System.currentTimeMillis() - startTime))
                     .map(v -> Either.<String, ApprovalRecord>right(record));
             })
             .yield((startTime, optRecord, result) -> result);
@@ -259,7 +261,7 @@ public final class ApprovalProcess {
         }
 
         return ForIO.set(IO.delay(System::currentTimeMillis))
-            .bind(startTime -> repository.findRecord(requestId))
+            .bind(startTime -> repository.find(requestId))
             .bind((startTime, optRecord) -> {
                 if (optRecord.isEmpty()) {
                     return IO.of(Either.<String, ApprovalRecord>left("Request record not found: " + requestId));
@@ -291,10 +293,10 @@ public final class ApprovalProcess {
 
                 ApprovalEvent event = new RequestEscalated(requestId, approverId, targetAuthority, reason, now);
 
-                return repository.saveRecord(record)
+                return repository.save(record.requestId(), record)
                     .flatMap(v -> publisher.publish(event))
-                    .flatMap(v -> telemetry.recordEscalation(requestId))
-                    .flatMap(v -> telemetry.recordDuration(requestId, System.currentTimeMillis() - startTime))
+                    .flatMap(v -> telemetry.recordSuccess("approvable", requestId + ":escalate"))
+                    .flatMap(v -> telemetry.recordDuration("approvable", requestId, System.currentTimeMillis() - startTime))
                     .map(v -> Either.<String, ApprovalRecord>right(record));
             })
             .yield((startTime, optRecord, result) -> result);

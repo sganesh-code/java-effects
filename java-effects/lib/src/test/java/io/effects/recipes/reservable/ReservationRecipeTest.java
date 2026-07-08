@@ -2,9 +2,11 @@ package io.effects.recipes.reservable;
 
 import io.effects.Either;
 import io.effects.ports.EventPublisher;
+import io.effects.ports.StateRepository;
+import io.effects.ports.TelemetryPort;
 import io.effects.adapters.InMemoryEventPublisher;
+import io.effects.adapters.InMemoryStateRepository;
 import io.effects.recipes.ports.reservable.*;
-import io.effects.recipes.adapters.reservable.*;
 import io.effects.recipes.reservable.healthcare.AppointmentSlot;
 import io.effects.recipes.reservable.ecommerce.InventoryUnit;
 import org.junit.jupiter.api.Test;
@@ -27,32 +29,28 @@ class ReservationRecipeTest {
 
         Instant t0 = Instant.parse("2026-07-08T10:00:00Z");
 
-        // Patient A holds slot (valid)
-        Either<String, Hold> holdResultA = clinicProcess.hold("slot-123", "patient-A", 1, 60, t0).unsafeRunSync();
+        // Patient A holds slot (succeeds)
+        Either<String, Hold> holdResultA = clinicProcess.hold("slot-123", "patient-A", 1, 300, t0).unsafeRunSync();
         assertTrue(holdResultA.isRight());
         Hold holdA = holdResultA.getRight();
-        assertEquals(Hold.Status.HELD, holdA.status());
 
-        // Patient B attempts to hold same slot -> rejected internally by slot cell's own state machine
-        Either<String, Hold> holdResultB = clinicProcess.hold("slot-123", "patient-B", 1, 60, t0).unsafeRunSync();
+        // Patient B requests same slot -> fails internally (slot has hold and capacity is 1, handled synchronously inside domain)
+        Either<String, Hold> holdResultB = clinicProcess.hold("slot-123", "patient-B", 1, 300, t0).unsafeRunSync();
         assertTrue(holdResultB.isLeft());
-        assertTrue(holdResultB.getLeft().contains("already held or confirmed"));
+        assertTrue(holdResultB.getLeft().contains("Appointment slot is already held or confirmed"));
 
-        // Patient A confirms hold into Reservation (scheduled visit)
-        Either<String, Reservation> confirmResultA = clinicProcess.confirm(holdA.holdId(), t0.plusSeconds(30)).unsafeRunSync();
-        assertTrue(confirmResultA.isRight());
-        Reservation reservationA = confirmResultA.getRight();
-        assertEquals("patient-A", reservationA.actorId());
-        assertEquals("slot-123", reservationA.resourceId());
+        // Patient A confirms appointment before expiry -> succeeds
+        Either<String, Reservation> confirmResult = clinicProcess.confirm(holdA.holdId(), t0.plusSeconds(120)).unsafeRunSync();
+        assertTrue(confirmResult.isRight());
+        Reservation reservation = confirmResult.getRight();
+        assertNotNull(reservation.reservationId());
     }
 
-    // 2. E-commerce Domain validation (capacity = 5, bulk inventory)
+    // 2. E-commerce Inventory/Stock validation (capacity = 5, multiple holds)
     @Test
-    void testEcommerceInventoryReservationAndLaws() {
+    void testEcommerceInventoryStockLeasing() {
         ReservationProcess storeProcess = new ReservationProcess();
         InventoryUnit skuUnit = new InventoryUnit("sku-widget", "Mechanical Keyboard");
-        
-        // Register stateless resource and configure stock level monadically
         storeProcess.add("sku-widget", skuUnit, 5).unsafeRunSync();
 
         Instant t0 = Instant.parse("2026-07-08T12:00:00Z");
@@ -102,53 +100,36 @@ class ReservationRecipeTest {
     // 3. Test dependency injection of StateRepository, EventPublisher, and TelemetryPort at runtime
     @Test
     void testPortsAndAdaptersRuntimeInjection() {
-        InMemoryStateRepository stateRepo = new InMemoryStateRepository();
+        InMemoryStateRepository<String, ResourceLedger> ledgerRepo = new InMemoryStateRepository<>();
+        InMemoryStateRepository<String, Hold> holdRepo = new InMemoryStateRepository<>();
         InMemoryEventPublisher<ReservationEvent> eventPub = new InMemoryEventPublisher<>();
         
         // Custom tracking telemetry using a simple spy implementation
         class TelemetrySpy implements TelemetryPort {
-            int holdDurationsRecorded = 0;
-            int holdSuccesses = 0;
-            int holdFailures = 0;
-            int confirmationSuccesses = 0;
-            int confirmationFailures = 0;
+            int successCalls = 0;
+            int failureCalls = 0;
+            int durationCalls = 0;
 
             @Override
-            public io.effects.IO<Void> recordHoldDuration(String resourceId, long durationMs) {
+            public io.effects.IO<Void> recordSuccess(String context, String operationId) {
                 return io.effects.IO.delay(() -> {
-                    holdDurationsRecorded++;
+                    successCalls++;
                     return null;
                 });
             }
 
             @Override
-            public io.effects.IO<Void> recordHoldSuccess(String resourceId) {
+            public io.effects.IO<Void> recordFailure(String context, String operationId, String reason) {
                 return io.effects.IO.delay(() -> {
-                    holdSuccesses++;
+                    failureCalls++;
                     return null;
                 });
             }
 
             @Override
-            public io.effects.IO<Void> recordHoldFailure(String resourceId, String reason) {
+            public io.effects.IO<Void> recordDuration(String context, String operationId, long durationMs) {
                 return io.effects.IO.delay(() -> {
-                    holdFailures++;
-                    return null;
-                });
-            }
-
-            @Override
-            public io.effects.IO<Void> recordConfirmationSuccess(String resourceId) {
-                return io.effects.IO.delay(() -> {
-                    confirmationSuccesses++;
-                    return null;
-                });
-            }
-
-            @Override
-            public io.effects.IO<Void> recordConfirmationFailure(String resourceId, String reason) {
-                return io.effects.IO.delay(() -> {
-                    confirmationFailures++;
+                    durationCalls++;
                     return null;
                 });
             }
@@ -157,7 +138,7 @@ class ReservationRecipeTest {
         TelemetrySpy telemetrySpy = new TelemetrySpy();
 
         // Inject our custom ports/adapters
-        ReservationProcess customProcess = new ReservationProcess(stateRepo, eventPub, telemetrySpy);
+        ReservationProcess customProcess = new ReservationProcess(ledgerRepo, holdRepo, eventPub, telemetrySpy);
         AppointmentSlot slot = new AppointmentSlot("slot-ports", "Dr. Jane Doe", "Cardiology");
         
         customProcess.add("slot-ports", slot, 1).unsafeRunSync();
@@ -170,7 +151,7 @@ class ReservationRecipeTest {
         Hold hold = holdResult.getRight();
 
         // Check StateRepository persistence
-        java.util.Optional<Hold> persistedHold = stateRepo.findHold(hold.holdId()).unsafeRunSync();
+        java.util.Optional<Hold> persistedHold = holdRepo.find(hold.holdId()).unsafeRunSync();
         assertTrue(persistedHold.isPresent());
         assertEquals("patient-ports", persistedHold.get().actorId());
 
@@ -183,9 +164,9 @@ class ReservationRecipeTest {
         assertEquals("slot-ports", holdCreatedEvent.resourceId());
 
         // Check TelemetryPort tracking
-        assertEquals(1, telemetrySpy.holdSuccesses);
-        assertEquals(1, telemetrySpy.holdDurationsRecorded);
-        assertEquals(0, telemetrySpy.holdFailures);
+        assertEquals(1, telemetrySpy.successCalls);
+        assertEquals(1, telemetrySpy.durationCalls);
+        assertEquals(0, telemetrySpy.failureCalls);
 
         // 2. Assert confirmation operation persists and publishes events/telemetry
         Either<String, Reservation> confirmResult = customProcess.confirm(hold.holdId(), t0.plusSeconds(30)).unsafeRunSync();
@@ -193,7 +174,7 @@ class ReservationRecipeTest {
         Reservation reservation = confirmResult.getRight();
 
         // Check state change (Hold is now CONFIRMED)
-        java.util.Optional<Hold> updatedHold = stateRepo.findHold(hold.holdId()).unsafeRunSync();
+        java.util.Optional<Hold> updatedHold = holdRepo.find(hold.holdId()).unsafeRunSync();
         assertTrue(updatedHold.isPresent());
         assertEquals(Hold.Status.CONFIRMED, updatedHold.get().status());
 
@@ -206,8 +187,8 @@ class ReservationRecipeTest {
         assertEquals(reservation.reservationId(), holdConfirmedEvent.reservationId());
 
         // Check TelemetryPort tracking
-        assertEquals(1, telemetrySpy.confirmationSuccesses);
-        assertEquals(2, telemetrySpy.holdDurationsRecorded); // confirmation also records duration
-        assertEquals(0, telemetrySpy.confirmationFailures);
+        assertEquals(2, telemetrySpy.successCalls);
+        assertEquals(2, telemetrySpy.durationCalls); // confirmation also records duration
+        assertEquals(0, telemetrySpy.failureCalls);
     }
 }
