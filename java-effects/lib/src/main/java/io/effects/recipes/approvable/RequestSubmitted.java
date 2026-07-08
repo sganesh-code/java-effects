@@ -6,7 +6,7 @@ import java.util.Objects;
 /**
  * Event published when a request is submitted and enters the pending or escalated state.
  */
-public final class RequestSubmitted implements ApprovalEvent {
+final class RequestSubmitted implements ApprovalEvent {
     private final String requestId;
     private final String initiatorId;
     private final String requiredAuthority;

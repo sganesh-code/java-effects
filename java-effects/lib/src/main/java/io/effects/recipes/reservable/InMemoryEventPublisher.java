@@ -8,7 +8,7 @@ import java.util.List;
 /**
  * An in-memory, thread-safe implementation of EventPublisher for testing and auditing.
  */
-public final class InMemoryEventPublisher implements EventPublisher {
+final class InMemoryEventPublisher implements EventPublisher {
     private final List<ReservationEvent> events = Collections.synchronizedList(new ArrayList<>());
 
     @Override

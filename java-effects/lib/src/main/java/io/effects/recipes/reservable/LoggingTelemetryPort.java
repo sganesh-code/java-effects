@@ -5,7 +5,7 @@ import io.effects.IO;
 /**
  * A telemetry adapter that logs operations to stdout for local debugging and validation.
  */
-public final class LoggingTelemetryPort implements TelemetryPort {
+final class LoggingTelemetryPort implements TelemetryPort {
 
     @Override
     public IO<Void> recordHoldDuration(String resourceId, long durationMs) {

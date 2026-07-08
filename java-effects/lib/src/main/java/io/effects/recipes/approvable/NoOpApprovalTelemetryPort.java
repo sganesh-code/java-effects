@@ -5,7 +5,7 @@ import io.effects.IO;
 /**
  * A telemetry adapter that discards all metrics and logs.
  */
-public final class NoOpApprovalTelemetryPort implements ApprovalTelemetryPort {
+final class NoOpApprovalTelemetryPort implements ApprovalTelemetryPort {
 
     @Override
     public IO<Void> recordSubmissionSuccess(String requestId) {

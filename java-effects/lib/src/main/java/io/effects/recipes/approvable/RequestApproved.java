@@ -6,7 +6,7 @@ import java.util.Objects;
 /**
  * Event published when a request is successfully and fully approved.
  */
-public final class RequestApproved implements ApprovalEvent {
+final class RequestApproved implements ApprovalEvent {
     private final String requestId;
     private final String approverId;
     private final String comment;

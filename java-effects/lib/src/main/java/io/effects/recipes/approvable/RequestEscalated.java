@@ -6,7 +6,7 @@ import java.util.Objects;
 /**
  * Event published when a request is escalated to a higher required authority.
  */
-public final class RequestEscalated implements ApprovalEvent {
+final class RequestEscalated implements ApprovalEvent {
     private final String requestId;
     private final String escalatorId;
     private final String targetAuthority;

@@ -6,7 +6,7 @@ import java.util.Objects;
 /**
  * Event published when a request is rejected.
  */
-public final class RequestRejected implements ApprovalEvent {
+final class RequestRejected implements ApprovalEvent {
     private final String requestId;
     private final String rejecterId;
     private final String reason;

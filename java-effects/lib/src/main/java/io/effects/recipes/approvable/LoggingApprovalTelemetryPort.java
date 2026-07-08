@@ -5,7 +5,7 @@ import io.effects.IO;
 /**
  * A telemetry adapter that logs operations to stdout for local debugging and validation.
  */
-public final class LoggingApprovalTelemetryPort implements ApprovalTelemetryPort {
+final class LoggingApprovalTelemetryPort implements ApprovalTelemetryPort {
 
     @Override
     public IO<Void> recordSubmissionSuccess(String requestId) {

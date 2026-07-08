@@ -8,7 +8,7 @@ import java.util.List;
 /**
  * An in-memory, thread-safe implementation of ApprovalEventPublisher for testing and auditing.
  */
-public final class InMemoryApprovalEventPublisher implements ApprovalEventPublisher {
+final class InMemoryApprovalEventPublisher implements ApprovalEventPublisher {
     private final List<ApprovalEvent> events = Collections.synchronizedList(new ArrayList<>());
 
     @Override

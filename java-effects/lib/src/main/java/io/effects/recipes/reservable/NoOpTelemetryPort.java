@@ -5,7 +5,7 @@ import io.effects.IO;
 /**
  * A telemetry adapter that discards all logs and metrics.
  */
-public final class NoOpTelemetryPort implements TelemetryPort {
+final class NoOpTelemetryPort implements TelemetryPort {
 
     @Override
     public IO<Void> recordHoldDuration(String resourceId, long durationMs) {

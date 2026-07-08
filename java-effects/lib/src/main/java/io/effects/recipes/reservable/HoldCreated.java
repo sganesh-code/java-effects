@@ -5,7 +5,7 @@ import java.time.Instant;
 /**
  * Event published when a resource hold is successfully created.
  */
-public record HoldCreated(
+record HoldCreated(
     String holdId,
     String resourceId,
     String actorId,

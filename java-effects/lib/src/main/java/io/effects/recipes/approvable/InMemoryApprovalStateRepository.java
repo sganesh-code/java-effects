@@ -8,7 +8,7 @@ import java.util.concurrent.ConcurrentMap;
 /**
  * An in-memory, thread-safe implementation of ApprovalStateRepository for testing and local use.
  */
-public final class InMemoryApprovalStateRepository implements ApprovalStateRepository {
+final class InMemoryApprovalStateRepository implements ApprovalStateRepository {
     private final ConcurrentMap<String, ApprovalRecord> records = new ConcurrentHashMap<>();
 
     @Override

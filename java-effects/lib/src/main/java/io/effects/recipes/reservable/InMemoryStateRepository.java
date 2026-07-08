@@ -8,7 +8,7 @@ import java.util.concurrent.ConcurrentMap;
 /**
  * An in-memory, thread-safe implementation of StateRepository for testing and local use.
  */
-public final class InMemoryStateRepository implements StateRepository {
+final class InMemoryStateRepository implements StateRepository {
     private final ConcurrentMap<String, ResourceLedger> ledgers = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, Hold> holds = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, String> holdToResourceMapping = new ConcurrentHashMap<>();

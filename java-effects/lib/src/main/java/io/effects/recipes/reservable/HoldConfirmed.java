@@ -5,7 +5,7 @@ import java.time.Instant;
 /**
  * Event published when a resource hold is successfully confirmed.
  */
-public record HoldConfirmed(
+record HoldConfirmed(
     String holdId,
     String reservationId,
     String resourceId,
