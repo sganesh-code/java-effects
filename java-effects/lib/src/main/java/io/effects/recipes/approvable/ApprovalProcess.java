@@ -3,9 +3,10 @@ package io.effects.recipes.approvable;
 import io.effects.Either;
 import io.effects.IO;
 import io.effects.ForIO;
+import io.effects.ports.EventPublisher;
+import io.effects.adapters.InMemoryEventPublisher;
 import io.effects.recipes.ports.approvable.*;
 import io.effects.recipes.adapters.approvable.InMemoryApprovalStateRepository;
-import io.effects.recipes.adapters.approvable.InMemoryApprovalEventPublisher;
 import io.effects.recipes.adapters.approvable.NoOpApprovalTelemetryPort;
 import java.time.Instant;
 import java.util.Objects;
@@ -24,7 +25,7 @@ import java.util.concurrent.ConcurrentMap;
  */
 public final class ApprovalProcess {
     private final ApprovalStateRepository repository;
-    private final ApprovalEventPublisher publisher;
+    private final EventPublisher<ApprovalEvent> publisher;
     private final ApprovalTelemetryPort telemetry;
     private final ConcurrentMap<String, ApprovableRequest> requests = new ConcurrentHashMap<>();
 
@@ -32,7 +33,7 @@ public final class ApprovalProcess {
      * Default constructor uses the in-memory adapters for robust backward compatibility.
      */
     public ApprovalProcess() {
-        this(new InMemoryApprovalStateRepository(), new InMemoryApprovalEventPublisher(), new NoOpApprovalTelemetryPort());
+        this(new InMemoryApprovalStateRepository(), new InMemoryEventPublisher<>(), new NoOpApprovalTelemetryPort());
     }
 
     /**
@@ -40,7 +41,7 @@ public final class ApprovalProcess {
      */
     public ApprovalProcess(
         ApprovalStateRepository repository,
-        ApprovalEventPublisher publisher,
+        EventPublisher<ApprovalEvent> publisher,
         ApprovalTelemetryPort telemetry
     ) {
         this.repository = Objects.requireNonNull(repository);

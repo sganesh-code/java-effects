@@ -3,9 +3,10 @@ package io.effects.recipes.reservable;
 import io.effects.Either;
 import io.effects.IO;
 import io.effects.ForIO;
+import io.effects.ports.EventPublisher;
+import io.effects.adapters.InMemoryEventPublisher;
 import io.effects.recipes.ports.reservable.*;
 import io.effects.recipes.adapters.reservable.InMemoryStateRepository;
-import io.effects.recipes.adapters.reservable.InMemoryEventPublisher;
 import io.effects.recipes.adapters.reservable.NoOpTelemetryPort;
 import java.time.Instant;
 import java.util.Objects;
@@ -24,7 +25,7 @@ import java.util.concurrent.ConcurrentMap;
  */
 public final class ReservationProcess {
     private final StateRepository stateRepository;
-    private final EventPublisher eventPublisher;
+    private final EventPublisher<ReservationEvent> eventPublisher;
     private final TelemetryPort telemetryPort;
     private final ConcurrentMap<String, ReservableResource> resources = new ConcurrentHashMap<>();
 
@@ -32,7 +33,7 @@ public final class ReservationProcess {
      * Default constructor uses the in-memory adapters for robust backward compatibility.
      */
     public ReservationProcess() {
-        this(new InMemoryStateRepository(), new InMemoryEventPublisher(), new NoOpTelemetryPort());
+        this(new InMemoryStateRepository(), new InMemoryEventPublisher<>(), new NoOpTelemetryPort());
     }
 
     /**
@@ -40,7 +41,7 @@ public final class ReservationProcess {
      */
     public ReservationProcess(
         StateRepository stateRepository,
-        EventPublisher eventPublisher,
+        EventPublisher<ReservationEvent> eventPublisher,
         TelemetryPort telemetryPort
     ) {
         this.stateRepository = Objects.requireNonNull(stateRepository);

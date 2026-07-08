@@ -2,6 +2,8 @@ package io.effects.recipes.approvable;
 
 import io.effects.Either;
 import io.effects.IO;
+import io.effects.ports.EventPublisher;
+import io.effects.adapters.InMemoryEventPublisher;
 import io.effects.recipes.ports.approvable.*;
 import io.effects.recipes.adapters.approvable.*;
 import io.effects.recipes.approvable.ecommerce.ExpenseReport;
@@ -46,7 +48,7 @@ class ApprovalRecipeTest {
     @Test
     void testExpenseReportMidTierManagerApproval() {
         InMemoryApprovalStateRepository repo = new InMemoryApprovalStateRepository();
-        InMemoryApprovalEventPublisher publisher = new InMemoryApprovalEventPublisher();
+        InMemoryEventPublisher<ApprovalEvent> publisher = new InMemoryEventPublisher<>();
         ApprovalProcess process = new ApprovalProcess(repo, publisher, new NoOpApprovalTelemetryPort());
 
         ExpenseReport report = new ExpenseReport(450.00, "Developer Monitor");
@@ -151,7 +153,7 @@ class ApprovalRecipeTest {
     // 5. Healthcare Multi-step Surgical Dual/Triple Approval Flow
     @Test
     void testHealthcareSurgicalDualApprovalFlow() {
-        InMemoryApprovalEventPublisher publisher = new InMemoryApprovalEventPublisher();
+        InMemoryEventPublisher<ApprovalEvent> publisher = new InMemoryEventPublisher<>();
         ApprovalProcess process = new ApprovalProcess(new InMemoryApprovalStateRepository(), publisher, new NoOpApprovalTelemetryPort());
         
         MedicalProcedureRequest request = new MedicalProcedureRequest("Open Heart Surgery", true);
@@ -253,7 +255,7 @@ class ApprovalRecipeTest {
         TelemetrySpy spy = new TelemetrySpy();
         ApprovalProcess process = new ApprovalProcess(
             new InMemoryApprovalStateRepository(),
-            new InMemoryApprovalEventPublisher(),
+            new InMemoryEventPublisher<>(),
             spy
         );
 

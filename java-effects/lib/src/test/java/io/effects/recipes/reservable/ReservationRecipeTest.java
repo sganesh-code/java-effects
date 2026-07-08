@@ -1,6 +1,8 @@
 package io.effects.recipes.reservable;
 
 import io.effects.Either;
+import io.effects.ports.EventPublisher;
+import io.effects.adapters.InMemoryEventPublisher;
 import io.effects.recipes.ports.reservable.*;
 import io.effects.recipes.adapters.reservable.*;
 import io.effects.recipes.reservable.healthcare.AppointmentSlot;
@@ -101,7 +103,7 @@ class ReservationRecipeTest {
     @Test
     void testPortsAndAdaptersRuntimeInjection() {
         InMemoryStateRepository stateRepo = new InMemoryStateRepository();
-        InMemoryEventPublisher eventPub = new InMemoryEventPublisher();
+        InMemoryEventPublisher<ReservationEvent> eventPub = new InMemoryEventPublisher<>();
         
         // Custom tracking telemetry using a simple spy implementation
         class TelemetrySpy implements TelemetryPort {
