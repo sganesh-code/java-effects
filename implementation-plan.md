@@ -55,7 +55,7 @@ All of these recipes will strictly leverage our root-level, generalized ports an
       - Define a custom `State` record and `AuditEvent` record.
       - Implement tests proving that replaying step histories correctly folds them into matching states, and asserting cryptographic hashing chains.
 
-- [ ] **🎟️ [TICKET-002]: Implement the `Entitleable` Object Collaboration Recipe**
+- [x] **🎟️ [TICKET-002]: Implement the `Entitleable` Object Collaboration Recipe**
   - **Description:** 
     Implement the `Entitleable` recipe, representing a reusable, domain-agnostic protocol for managing user permissions, capability grants, dynamic revocations, and explanatory checks.
     
@@ -78,21 +78,26 @@ All of these recipes will strictly leverage our root-level, generalized ports an
       - Integrating with Keycloak, Active Directory, or OAuth 2.0 servers.
 
   - **Implementation Tasks:**
-    - [ ] Create `@java-effects/lib/src/main/java/io/effects/recipes/entitleable/EntitlementStep.java` containing:
+    - [x] Create `@java-effects/lib/src/main/java/io/effects/recipes/entitleable/EntitlementStep.java` containing:
+      - *Created EntitlementStep record with generic parameter `<G>` and enum action types.*
       - Add type parameter `<G>`.
       - Store `G grant`, `String stepId`, `Type type`, and timestamp.
-    - [ ] Create `@java-effects/lib/src/main/java/io/effects/recipes/entitleable/EntitleableRequest.java` containing:
+    - [x] Create `@java-effects/lib/src/main/java/io/effects/recipes/entitleable/EntitleableRequest.java` containing:
+      - *Created EntitleableRequest pure behavioral interface with generic parameters `<ID, G, C>` and synchronous evaluateGrant and evaluateCheck signatures.*
       - Add type parameters `<ID, G, C>`.
       - Define behavioral messages:
         - `Either<String, Void> evaluateGrant(EntitlementLedger<ID, G> ledger, G grant, Instant now);`
         - `Either<String, Void> evaluateCheck(EntitlementLedger<ID, G> ledger, G grant, C context, Instant now);`
-    - [ ] Create `@java-effects/lib/src/main/java/io/effects/recipes/entitleable/EntitlementLedger.java` containing:
+    - [x] Create `@java-effects/lib/src/main/java/io/effects/recipes/entitleable/EntitlementLedger.java` containing:
+      - *Created EntitlementLedger aggregate root class with generic parameters `<ID, G>` providing thread-safe double-dispatch collections and validations.*
       - Add type parameters `<ID, G>`.
       - Store `ID actorId`, `ConcurrentMap<String, EntitlementStep<G>> activeGrants`, and `List<EntitlementStep<G>> history`.
       - Maintain thread safety and active grant maps, executing double-dispatch.
-    - [ ] Create `@java-effects/lib/src/main/java/io/effects/recipes/entitleable/EntitleableProcess.java` containing:
+    - [x] Create `@java-effects/lib/src/main/java/io/effects/recipes/entitleable/EntitleableProcess.java` containing:
+      - *Created EntitleableProcess and EntitlementEvent to handle generic permission capability checks and event notifications.*
       - Monadic pipelines executing in `IO` for `grant()`, `revoke()`, and `check()`.
-    - [ ] Create `@java-effects/lib/src/test/java/io/effects/recipes/entitleable/EntitleableRecipeTest.java` containing:
+    - [x] Create `@java-effects/lib/src/test/java/io/effects/recipes/entitleable/EntitleableRecipeTest.java` containing:
+      - *Created EntitleableRecipeTest defining dynamic clearances, AccessContext scopes, and verifying expiries, revocations, and check rules.*
       - Define a custom `Clearance` grant record and `AccessContext` record.
       - Implement tests asserting grant bounds, temporal grant expirations, dynamic revocations, and access check explanations.
 
