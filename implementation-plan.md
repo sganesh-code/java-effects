@@ -148,7 +148,7 @@ The following tickets break down the comprehensive refactoring of the `java-effe
       - Add type parameters `<ID, O>`.
       - Map state management, events publishing, and telemetry ports to handle `<ID, O>` types.
 
-- [ ] **🎟️ [TICKET-005]: Generalize `Schedulable` Recipe to Support Custom Trigger Specifications**
+- [x] **🎟️ [TICKET-005]: Generalize `Schedulable` Recipe to Support Custom Trigger Specifications**
   - **Description:** 
     Refactor the `Schedulable` recipe to remove hardcoded `Instant triggerTime` scheduling assumptions. We will parameterize the entire package with generic types `<ID, T>`, where `ID` represents the scheduled occurrence identifier and `T` is the consumer's custom schedule specification model (e.g., cron strings, calendar periods, or event-driven triggers).
   - **Scope:**
@@ -158,20 +158,25 @@ The following tickets break down the comprehensive refactoring of the `java-effe
     - **Out of scope:**
       - Integrating with Quartz Scheduler or external cron engines.
   - **Implementation Tasks:**
-    - [ ] Update `@java-effects/lib/src/main/java/io/effects/recipes/schedulable/ScheduleStep.java` to:
+    - [x] Update `@java-effects/lib/src/main/java/io/effects/recipes/schedulable/ScheduleStep.java` to:
+      - *Refactored `ScheduleStep` to be parameterized by `<T>`, replacing primitive `Instant triggerTime` with the generic `T detail`.*
       - Add type parameter `<T>`.
       - Replace `Instant triggerTime` with `T detail`.
-    - [ ] Update `@java-effects/lib/src/main/java/io/effects/recipes/schedulable/SchedulableEvent.java` and its subclasses (`OccurrenceScheduled`, `OccurrenceRescheduled`, `OccurrenceFired`, `OccurrenceCancelled`):
+    - [x] Update `@java-effects/lib/src/main/java/io/effects/recipes/schedulable/SchedulableEvent.java` and its subclasses (`OccurrenceScheduled`, `OccurrenceRescheduled`, `OccurrenceFired`, `OccurrenceCancelled`):
+      - *Refactored `SchedulableEvent` and all implementing records (`OccurrenceScheduled`, `OccurrenceRescheduled`, `OccurrenceFired`, `OccurrenceCancelled`) to use type parameters `<ID, T>` instead of primitive types.*
       - Add type parameters `<ID, T>`.
       - Store generic `ID occurrenceId` and `T detail`.
-    - [ ] Update `@java-effects/lib/src/main/java/io/effects/recipes/schedulable/SchedulableRequest.java` to:
+    - [x] Update `@java-effects/lib/src/main/java/io/effects/recipes/schedulable/SchedulableRequest.java` to:
+      - *Refactored `SchedulableRequest` interface to add generic types `<ID, T>` and updated all evaluate methods.*
       - Add type parameters `<ID, T>`.
       - Refactor signatures to use generic `T` trigger details and receive `ScheduleLedger<ID, T>` to enable clean double-dispatch.
-    - [ ] Update `@java-effects/lib/src/main/java/io/effects/recipes/schedulable/ScheduleLedger.java` to:
+    - [x] Update `@java-effects/lib/src/main/java/io/effects/recipes/schedulable/ScheduleLedger.java` to:
+      - *Refactored `ScheduleLedger` to be generic `<ID, T>` and delegate all evaluations to `SchedulableRequest` via double-dispatch.*
       - Add type parameters `<ID, T>`.
       - Track only `ID occurrenceId`, `Status status`, `T triggerTime`, and `List<ScheduleStep<T>> history`.
       - Delegate all temporal validations to the `SchedulableRequest` via double-dispatch.
-    - [ ] Update `@java-effects/lib/src/main/java/io/effects/recipes/schedulable/SchedulableProcess.java` to:
+    - [x] Update `@java-effects/lib/src/main/java/io/effects/recipes/schedulable/SchedulableProcess.java` to:
+      - *Refactored `SchedulableProcess` to be parameterized by `<ID, T>` and mapped state persistences and events to generic trigger specifications.*
       - Add type parameters `<ID, T>`.
       - Propagate `T` specifications across the public API and database state lookups.
 

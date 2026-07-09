@@ -5,12 +5,12 @@ import java.time.Instant;
 /**
  * A historical domain fact representing a lifecycle event of the schedulable recipe.
  */
-public interface SchedulableEvent {
+public interface SchedulableEvent<ID, T> {
 
     /**
      * Unique identifier of the scheduled occurrence.
      */
-    String occurrenceId();
+    ID occurrenceId();
 
     /**
      * The timestamp of when the event occurred.

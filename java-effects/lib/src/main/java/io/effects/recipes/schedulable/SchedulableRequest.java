@@ -11,25 +11,25 @@ import java.time.Instant;
  * The monadic shell (SchedulableProcess) is responsible for lifting these pure synchronous
  * evaluations safely into the lazy, concurrent IO context.
  */
-public interface SchedulableRequest {
+public interface SchedulableRequest<ID, T> {
 
     /**
      * Behavioral Message: Evaluates whether an initial schedule is allowed.
      */
-    Either<String, Void> evaluateSchedule(ScheduleLedger ledger, Instant triggerTime, Instant now);
+    Either<String, Void> evaluateSchedule(ScheduleLedger<ID, T> ledger, T triggerTime, Instant now);
 
     /**
      * Behavioral Message: Evaluates whether rescheduling/adjusting the trigger time is allowed.
      */
-    Either<String, Void> evaluateReschedule(ScheduleLedger ledger, Instant newTriggerTime, Instant now);
+    Either<String, Void> evaluateReschedule(ScheduleLedger<ID, T> ledger, T newTriggerTime, Instant now);
 
     /**
      * Behavioral Message: Evaluates whether firing/executing the task is allowed.
      */
-    Either<String, Void> evaluateExecution(ScheduleLedger ledger, Instant now);
+    Either<String, Void> evaluateExecution(ScheduleLedger<ID, T> ledger, Instant now);
 
     /**
      * Behavioral Message: Evaluates whether cancelling the scheduled task is allowed.
      */
-    Either<String, Void> evaluateCancellation(ScheduleLedger ledger, Instant now);
+    Either<String, Void> evaluateCancellation(ScheduleLedger<ID, T> ledger, Instant now);
 }

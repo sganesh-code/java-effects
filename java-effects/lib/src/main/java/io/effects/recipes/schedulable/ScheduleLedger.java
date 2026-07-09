@@ -14,22 +14,22 @@ import java.util.UUID;
  * target trigger time, and chronological history of adjustments.
  * It is an Aggregate Root that completely owns schedule state transitions and produces SchedulableEvent occurrences.
  */
-public final class ScheduleLedger {
+public final class ScheduleLedger<ID, T> {
     public enum Status { INITIAL, SCHEDULED, FIRED, CANCELLED }
 
-    private final String occurrenceId;
+    private final ID occurrenceId;
     private Status status = Status.INITIAL;
-    private Instant triggerTime;
-    private final List<ScheduleStep> history = new ArrayList<>();
+    private T triggerTime;
+    private final List<ScheduleStep<T>> history = new ArrayList<>();
 
-    public ScheduleLedger(String occurrenceId) {
+    public ScheduleLedger(ID occurrenceId) {
         this.occurrenceId = Objects.requireNonNull(occurrenceId);
     }
 
-    public synchronized String occurrenceId() { return occurrenceId; }
+    public synchronized ID occurrenceId() { return occurrenceId; }
     public synchronized Status status() { return status; }
-    public synchronized Instant triggerTime() { return triggerTime; }
-    public synchronized List<ScheduleStep> history() { return Collections.unmodifiableList(new ArrayList<>(history)); }
+    public synchronized T triggerTime() { return triggerTime; }
+    public synchronized List<ScheduleStep<T>> history() { return Collections.unmodifiableList(new ArrayList<>(history)); }
 
     public synchronized boolean isTerminal() {
         return status == Status.FIRED || status == Status.CANCELLED;
@@ -38,7 +38,7 @@ public final class ScheduleLedger {
     /**
      * Records a step and transitions state internally.
      */
-    private synchronized void recordStep(ScheduleStep step, Status nextStatus, Instant triggerTime) {
+    private synchronized void recordStep(ScheduleStep<T> step, Status nextStatus, T triggerTime) {
         Objects.requireNonNull(step);
         Objects.requireNonNull(nextStatus);
 
@@ -56,11 +56,11 @@ public final class ScheduleLedger {
     /**
      * Behavioral Factory: Evaluates, schedules, and creates the ScheduleLedger.
      */
-    public static Either<String, TransitionResult<ScheduleLedger, SchedulableEvent>> schedule(
-        String occurrenceId, 
+    public static <ID, T> Either<String, TransitionResult<ScheduleLedger<ID, T>, SchedulableEvent<ID, T>>> schedule(
+        ID occurrenceId, 
         String actorId, 
-        Instant triggerTime, 
-        SchedulableRequest request, 
+        T triggerTime, 
+        SchedulableRequest<ID, T> request, 
         Instant now
     ) {
         Objects.requireNonNull(occurrenceId);
@@ -69,7 +69,7 @@ public final class ScheduleLedger {
         Objects.requireNonNull(request);
         Objects.requireNonNull(now);
 
-        ScheduleLedger ledger = new ScheduleLedger(occurrenceId);
+        ScheduleLedger<ID, T> ledger = new ScheduleLedger<>(occurrenceId);
 
         // Domain validation (double dispatch)
         Either<String, Void> eitherValid = request.evaluateSchedule(ledger, triggerTime, now);
@@ -77,7 +77,7 @@ public final class ScheduleLedger {
             return Either.left(eitherValid.getLeft());
         }
 
-        ScheduleStep step = new ScheduleStep(
+        ScheduleStep<T> step = new ScheduleStep<>(
             UUID.randomUUID().toString(),
             actorId,
             ScheduleStep.Type.SCHEDULE,
@@ -87,18 +87,18 @@ public final class ScheduleLedger {
         );
         ledger.recordStep(step, Status.SCHEDULED, triggerTime);
 
-        SchedulableEvent event = new OccurrenceScheduled(occurrenceId, triggerTime, now);
+        SchedulableEvent<ID, T> event = new OccurrenceScheduled<>(occurrenceId, triggerTime, now);
         return Either.right(new TransitionResult<>(ledger, event));
     }
 
     /**
      * Behavioral Transition: Adjusts/reschedules the occurrence trigger time.
      */
-    public synchronized Either<String, SchedulableEvent> reschedule(
+    public synchronized Either<String, SchedulableEvent<ID, T>> reschedule(
         String actorId, 
-        Instant newTriggerTime, 
+        T newTriggerTime, 
         String comment, 
-        SchedulableRequest request, 
+        SchedulableRequest<ID, T> request, 
         Instant now
     ) {
         Objects.requireNonNull(actorId);
@@ -120,7 +120,7 @@ public final class ScheduleLedger {
             return Either.left(eitherValid.getLeft());
         }
 
-        ScheduleStep step = new ScheduleStep(
+        ScheduleStep<T> step = new ScheduleStep<>(
             UUID.randomUUID().toString(),
             actorId,
             ScheduleStep.Type.RESCHEDULE,
@@ -130,16 +130,16 @@ public final class ScheduleLedger {
         );
         recordStep(step, Status.SCHEDULED, newTriggerTime);
 
-        SchedulableEvent event = new OccurrenceRescheduled(occurrenceId, newTriggerTime, now);
+        SchedulableEvent<ID, T> event = new OccurrenceRescheduled<>(occurrenceId, newTriggerTime, now);
         return Either.right(event);
     }
 
     /**
      * Behavioral Transition: Executes/fires the scheduled task occurrence.
      */
-    public synchronized Either<String, SchedulableEvent> fire(
+    public synchronized Either<String, SchedulableEvent<ID, T>> fire(
         String actorId, 
-        SchedulableRequest request, 
+        SchedulableRequest<ID, T> request, 
         Instant now
     ) {
         Objects.requireNonNull(actorId);
@@ -159,7 +159,7 @@ public final class ScheduleLedger {
             return Either.left(eitherValid.getLeft());
         }
 
-        ScheduleStep step = new ScheduleStep(
+        ScheduleStep<T> step = new ScheduleStep<>(
             UUID.randomUUID().toString(),
             actorId,
             ScheduleStep.Type.FIRE,
@@ -169,17 +169,17 @@ public final class ScheduleLedger {
         );
         recordStep(step, Status.FIRED, null);
 
-        SchedulableEvent event = new OccurrenceFired(occurrenceId, now);
+        SchedulableEvent<ID, T> event = new OccurrenceFired<>(occurrenceId, now);
         return Either.right(event);
     }
 
     /**
      * Behavioral Transition: Cancels the scheduled occurrence.
      */
-    public synchronized Either<String, SchedulableEvent> cancel(
+    public synchronized Either<String, SchedulableEvent<ID, T>> cancel(
         String actorId, 
         String reason, 
-        SchedulableRequest request, 
+        SchedulableRequest<ID, T> request, 
         Instant now
     ) {
         Objects.requireNonNull(actorId);
@@ -200,7 +200,7 @@ public final class ScheduleLedger {
             return Either.left(eitherValid.getLeft());
         }
 
-        ScheduleStep step = new ScheduleStep(
+        ScheduleStep<T> step = new ScheduleStep<>(
             UUID.randomUUID().toString(),
             actorId,
             ScheduleStep.Type.CANCEL,
@@ -210,7 +210,7 @@ public final class ScheduleLedger {
         );
         recordStep(step, Status.CANCELLED, null);
 
-        SchedulableEvent event = new OccurrenceCancelled(occurrenceId, now);
+        SchedulableEvent<ID, T> event = new OccurrenceCancelled<>(occurrenceId, now);
         return Either.right(event);
     }
 }
