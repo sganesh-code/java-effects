@@ -11,26 +11,26 @@ import java.time.Instant;
  * The monadic shell (ReservationProcess) is responsible for lifting these pure synchronous
  * evaluations safely into the lazy, concurrent IO context.
  */
-public interface ReservableResource {
+public interface ReservableResource<ID, Q> {
 
     /**
      * Behavioral Message: Attempt to hold capacity on this resource.
      * Evaluates invariants and records a hold synchronously.
      */
-    Either<String, Hold> tryHold(ResourceLedger ledger, String holdId, String actorId, int quantity, Instant now, Instant expiresAt);
+    Either<String, Hold<ID, Q>> tryHold(ResourceLedger<ID, Q> ledger, String holdId, String actorId, Q quantity, Instant now, Instant expiresAt);
 
     /**
      * Behavioral Message: Attempt to confirm an existing hold into a reservation.
      */
-    Either<String, Reservation> tryConfirm(ResourceLedger ledger, Hold hold, String reservationId, Instant now);
+    Either<String, Reservation<ID, Q>> tryConfirm(ResourceLedger<ID, Q> ledger, Hold<ID, Q> hold, String reservationId, Instant now);
 
     /**
      * Notification Callback: Invoked when a hold is released back to the capacity pool.
      */
-    void onRelease(Hold hold);
+    void onRelease(Hold<ID, Q> hold);
 
     /**
      * Notification Callback: Invoked when a hold is expired.
      */
-    void onExpire(Hold hold);
+    void onExpire(Hold<ID, Q> hold);
 }

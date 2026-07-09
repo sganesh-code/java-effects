@@ -5,8 +5,8 @@ import java.time.Instant;
 /**
  * Event published when a resource hold expires.
  */
-public record HoldExpired(
+public record HoldExpired<ID, Q>(
     String holdId,
-    String resourceId,
+    ID resourceId,
     Instant occurredAt
-) implements ReservationEvent {}
+) implements ReservationEvent<ID, Q> {}

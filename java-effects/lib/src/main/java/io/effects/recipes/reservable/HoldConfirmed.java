@@ -5,11 +5,11 @@ import java.time.Instant;
 /**
  * Event published when a resource hold is successfully confirmed.
  */
-public record HoldConfirmed(
+public record HoldConfirmed<ID, Q>(
     String holdId,
     String reservationId,
-    String resourceId,
+    ID resourceId,
     String actorId,
-    int quantity,
+    Q quantity,
     Instant occurredAt
-) implements ReservationEvent {}
+) implements ReservationEvent<ID, Q> {}

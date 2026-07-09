@@ -2,59 +2,52 @@ package io.effects.recipes.reservable;
 
 import io.effects.Either;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.stream.Collectors;
 import java.util.function.BiFunction;
 
 /**
  * A reusable, thread-safe state container provided by the recipe.
- * It manages all the concurrent bookkeeping (holds, expiries, reservations, capacity math).
+ * It manages all the concurrent bookkeeping (holds, expiries, reservations).
  * 
  * In this design, the ledger is completely synchronous and pure, removing monadic IO wrappers
  * from the core bookkeeping process.
  */
-public final class ResourceLedger {
-    private final int totalCapacity;
-    private final ConcurrentMap<String, Hold> activeHolds = new ConcurrentHashMap<>();
-    private final ConcurrentMap<String, Reservation> activeReservations = new ConcurrentHashMap<>();
+public final class ResourceLedger<ID, Q> {
+    private final ConcurrentMap<String, Hold<ID, Q>> activeHolds = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, Reservation<ID, Q>> activeReservations = new ConcurrentHashMap<>();
 
-    public ResourceLedger(int totalCapacity) {
-        if (totalCapacity < 0) {
-            throw new IllegalArgumentException("totalCapacity cannot be negative");
-        }
-        this.totalCapacity = totalCapacity;
-    }
+    public ResourceLedger() {}
 
     private void cleanup(Instant now) {
         activeHolds.values().removeIf(h -> now.isAfter(h.expiresAt()));
     }
 
-    private int getActiveCapacity(Instant now) {
+    public synchronized List<Hold<ID, Q>> activeHolds(Instant now) {
         cleanup(now);
-        int held = activeHolds.values().stream()
-            .filter(h -> now.isBefore(h.expiresAt()))
-            .mapToInt(Hold::quantity)
-            .sum();
+        return List.copyOf(activeHolds.values());
+    }
 
-        int confirmed = activeReservations.values().stream()
-            .mapToInt(Reservation::quantity)
-            .sum();
-
-        return held + confirmed;
+    public synchronized List<Reservation<ID, Q>> activeReservations() {
+        return List.copyOf(activeReservations.values());
     }
 
     /**
      * Double Dispatch: Attempt to record a hold synchronously.
      */
-    public Either<String, Hold> recordHold(
-        Hold hold, 
+    public synchronized Either<String, Hold<ID, Q>> recordHold(
+        Hold<ID, Q> hold, 
         Instant now, 
-        BiFunction<Integer, Integer, Optional<String>> businessPolicy
+        BiFunction<List<Hold<ID, Q>>, List<Reservation<ID, Q>>, Optional<String>> businessPolicy
     ) {
         cleanup(now);
-        int active = getActiveCapacity(now);
-        Optional<String> rejectionReason = businessPolicy.apply(active, totalCapacity);
+        Optional<String> rejectionReason = businessPolicy.apply(
+            List.copyOf(activeHolds.values()), 
+            List.copyOf(activeReservations.values())
+        );
         if (rejectionReason.isEmpty()) {
             activeHolds.put(hold.holdId(), hold);
             return Either.right(hold);
@@ -65,15 +58,15 @@ public final class ResourceLedger {
     /**
      * Double Dispatch: Attempt to confirm a hold synchronously.
      */
-    public Either<String, Reservation> recordConfirmation(
-        Hold hold, 
-        Reservation reservation, 
-        BiFunction<Integer, Hold, Optional<String>> confirmationPolicy
+    public synchronized Either<String, Reservation<ID, Q>> recordConfirmation(
+        Hold<ID, Q> hold, 
+        Reservation<ID, Q> reservation, 
+        BiFunction<List<Reservation<ID, Q>>, Hold<ID, Q>, Optional<String>> confirmationPolicy
     ) {
-        Hold currentHold = activeHolds.get(hold.holdId());
+        Hold<ID, Q> currentHold = activeHolds.get(hold.holdId());
         if (currentHold == null) {
             // Idempotency: check if already confirmed
-            Reservation existing = activeReservations.values().stream()
+            Reservation<ID, Q> existing = activeReservations.values().stream()
                 .filter(r -> r.holdId().equals(hold.holdId()))
                 .findFirst()
                 .orElse(null);
@@ -88,7 +81,10 @@ public final class ResourceLedger {
             return Either.left("Hold has expired");
         }
 
-        Optional<String> rejectionReason = confirmationPolicy.apply(totalCapacity, currentHold);
+        Optional<String> rejectionReason = confirmationPolicy.apply(
+            List.copyOf(activeReservations.values()),
+            currentHold
+        );
         if (rejectionReason.isEmpty()) {
             activeHolds.remove(hold.holdId());
             activeReservations.put(reservation.reservationId(), reservation);
@@ -101,14 +97,14 @@ public final class ResourceLedger {
     /**
      * Releases an active hold.
      */
-    public void recordRelease(String holdId) {
+    public synchronized void recordRelease(String holdId) {
         activeHolds.remove(holdId);
     }
 
     /**
      * Expires an active hold.
      */
-    public void recordExpire(String holdId) {
+    public synchronized void recordExpire(String holdId) {
         activeHolds.remove(holdId);
     }
 }

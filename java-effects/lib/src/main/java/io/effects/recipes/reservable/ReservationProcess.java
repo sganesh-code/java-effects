@@ -24,12 +24,12 @@ import java.util.concurrent.ConcurrentMap;
  * engine, and thus exposes purely monadic APIs (returning IO) to allow lazy, virtual-thread execution,
  * cancellation, and pipeline composition.
  */
-public final class ReservationProcess {
-    private final StateRepository<String, ResourceLedger> ledgerRepository;
-    private final StateRepository<String, Hold> holdRepository;
-    private final EventPublisher<ReservationEvent> eventPublisher;
+public final class ReservationProcess<ID, Q> {
+    private final StateRepository<ID, ResourceLedger<ID, Q>> ledgerRepository;
+    private final StateRepository<String, Hold<ID, Q>> holdRepository;
+    private final EventPublisher<ReservationEvent<ID, Q>> eventPublisher;
     private final TelemetryPort telemetryPort;
-    private final ConcurrentMap<String, ReservableResource> resources = new ConcurrentHashMap<>();
+    private final ConcurrentMap<ID, ReservableResource<ID, Q>> resources = new ConcurrentHashMap<>();
 
     /**
      * Default constructor uses the in-memory adapters for robust backward compatibility.
@@ -42,9 +42,9 @@ public final class ReservationProcess {
      * Dependency injection constructor to configure custom ports/adapters at runtime.
      */
     public ReservationProcess(
-        StateRepository<String, ResourceLedger> ledgerRepository,
-        StateRepository<String, Hold> holdRepository,
-        EventPublisher<ReservationEvent> eventPublisher,
+        StateRepository<ID, ResourceLedger<ID, Q>> ledgerRepository,
+        StateRepository<String, Hold<ID, Q>> holdRepository,
+        EventPublisher<ReservationEvent<ID, Q>> eventPublisher,
         TelemetryPort telemetryPort
     ) {
         this.ledgerRepository = Objects.requireNonNull(ledgerRepository);
@@ -54,26 +54,26 @@ public final class ReservationProcess {
     }
 
     /**
-     * Registers a behavioral resource domain object and configures its capacity.
+     * Registers a behavioral resource domain object.
      */
-    public IO<Void> add(String resourceId, ReservableResource resource, int capacity) {
+    public IO<Void> add(ID resourceId, ReservableResource<ID, Q> resource) {
         Objects.requireNonNull(resourceId);
         Objects.requireNonNull(resource);
         return IO.delay(() -> {
             resources.put(resourceId, resource);
             return null;
-        }).flatMap(v -> ledgerRepository.save(resourceId, new ResourceLedger(capacity)));
+        }).flatMap(v -> ledgerRepository.save(resourceId, new ResourceLedger<>()));
     }
 
     /**
      * Attempts to acquire a lease/hold on a resource.
      */
-    public IO<Either<String, Hold>> hold(String resourceId, String actorId, int quantity, long holdDurationSeconds, Instant now) {
+    public IO<Either<String, Hold<ID, Q>>> hold(ID resourceId, String actorId, Q quantity, long holdDurationSeconds, Instant now) {
         Objects.requireNonNull(resourceId);
         Objects.requireNonNull(actorId);
         Objects.requireNonNull(now);
 
-        ReservableResource resource = resources.get(resourceId);
+        ReservableResource<ID, Q> resource = resources.get(resourceId);
         if (resource == null) {
             return IO.of(Either.left("Resource not registered: " + resourceId));
         }
@@ -82,29 +82,29 @@ public final class ReservationProcess {
             .bind(startTime -> ledgerRepository.find(resourceId))
             .bind((startTime, optLedger) -> {
                 if (optLedger.isEmpty()) {
-                    return IO.of(Either.<String, Hold>left("Resource ledger not found: " + resourceId));
+                    return IO.of(Either.<String, Hold<ID, Q>>left("Resource ledger not found: " + resourceId));
                 }
 
-                ResourceLedger ledger = optLedger.get();
+                ResourceLedger<ID, Q> ledger = optLedger.get();
                 String holdId = UUID.randomUUID().toString();
                 Instant expiresAt = now.plusSeconds(holdDurationSeconds);
 
                 // Invoke pure domain logic synchronously
-                Either<String, Hold> tryHoldResult = resource.tryHold(ledger, holdId, actorId, quantity, now, expiresAt);
+                Either<String, Hold<ID, Q>> tryHoldResult = resource.tryHold(ledger, holdId, actorId, quantity, now, expiresAt);
                 if (tryHoldResult.isRight()) {
-                    Hold hold = tryHoldResult.getRight();
+                    Hold<ID, Q> hold = tryHoldResult.getRight();
                     return holdRepository.save(holdId, hold)
                         .flatMap(v -> ledgerRepository.save(resourceId, ledger))
-                        .flatMap(v -> eventPublisher.publish(new HoldCreated(holdId, resourceId, actorId, quantity, expiresAt, now)))
-                        .flatMap(v -> telemetryPort.recordSuccess("reservable", resourceId + ":hold"))
-                        .flatMap(v -> telemetryPort.recordDuration("reservable", resourceId, System.currentTimeMillis() - startTime))
-                        .map(v -> Either.<String, Hold>right(hold));
+                        .flatMap(v -> eventPublisher.publish(new HoldCreated<>(holdId, resourceId, actorId, quantity, expiresAt, now)))
+                        .flatMap(v -> telemetryPort.recordSuccess("reservable", resourceId.toString() + ":hold"))
+                        .flatMap(v -> telemetryPort.recordDuration("reservable", resourceId.toString(), System.currentTimeMillis() - startTime))
+                        .map(v -> Either.<String, Hold<ID, Q>>right(hold));
                 } else {
                     String reason = tryHoldResult.getLeft();
-                    return eventPublisher.publish(new HoldRejected(resourceId, actorId, quantity, reason, now))
-                        .flatMap(v -> telemetryPort.recordFailure("reservable", resourceId + ":hold", reason))
-                        .flatMap(v -> telemetryPort.recordDuration("reservable", resourceId, System.currentTimeMillis() - startTime))
-                        .map(v -> Either.<String, Hold>left(reason));
+                    return eventPublisher.publish(new HoldRejected<>(resourceId, actorId, quantity, reason, now))
+                        .flatMap(v -> telemetryPort.recordFailure("reservable", resourceId.toString() + ":hold", reason))
+                        .flatMap(v -> telemetryPort.recordDuration("reservable", resourceId.toString(), System.currentTimeMillis() - startTime))
+                        .map(v -> Either.<String, Hold<ID, Q>>left(reason));
                 }
             })
             .yield((startTime, optLedger, result) -> result);
@@ -113,7 +113,7 @@ public final class ReservationProcess {
     /**
      * Confirms/Finalizes a hold into a full reservation.
      */
-    public IO<Either<String, Reservation>> confirm(String holdId, Instant now) {
+    public IO<Either<String, Reservation<ID, Q>>> confirm(String holdId, Instant now) {
         Objects.requireNonNull(holdId);
         Objects.requireNonNull(now);
 
@@ -121,42 +121,42 @@ public final class ReservationProcess {
             .bind(startTime -> holdRepository.find(holdId))
             .bind((startTime, optHold) -> {
                 if (optHold.isEmpty()) {
-                    return IO.of(Either.<String, Reservation>left("Hold not found: " + holdId));
+                    return IO.of(Either.<String, Reservation<ID, Q>>left("Hold not found: " + holdId));
                 }
 
-                Hold hold = optHold.get();
-                String resourceId = hold.resourceId();
-                ReservableResource resource = resources.get(resourceId);
+                Hold<ID, Q> hold = optHold.get();
+                ID resourceId = hold.resourceId();
+                ReservableResource<ID, Q> resource = resources.get(resourceId);
                 if (resource == null) {
-                    return IO.of(Either.<String, Reservation>left("Resource not registered: " + resourceId));
+                    return IO.of(Either.<String, Reservation<ID, Q>>left("Resource not registered: " + resourceId));
                 }
 
                 return ledgerRepository.find(resourceId)
                     .flatMap(optLedger -> {
                         if (optLedger.isEmpty()) {
-                            return IO.of(Either.<String, Reservation>left("Resource ledger not found: " + resourceId));
+                            return IO.of(Either.<String, Reservation<ID, Q>>left("Resource ledger not found: " + resourceId));
                         }
 
-                        ResourceLedger ledger = optLedger.get();
+                        ResourceLedger<ID, Q> ledger = optLedger.get();
                         String reservationId = UUID.randomUUID().toString();
 
                         // Invoke pure domain logic synchronously
-                        Either<String, Reservation> eitherRes = resource.tryConfirm(ledger, hold, reservationId, now);
+                        Either<String, Reservation<ID, Q>> eitherRes = resource.tryConfirm(ledger, hold, reservationId, now);
                         if (eitherRes.isRight()) {
-                            Reservation reservation = eitherRes.getRight();
-                            Hold updatedHold = hold.withStatus(Hold.Status.CONFIRMED);
+                            Reservation<ID, Q> reservation = eitherRes.getRight();
+                            Hold<ID, Q> updatedHold = hold.withStatus(Hold.Status.CONFIRMED);
 
                             return holdRepository.save(holdId, updatedHold)
                                 .flatMap(v -> ledgerRepository.save(resourceId, ledger))
-                                .flatMap(v -> eventPublisher.publish(new HoldConfirmed(holdId, reservationId, resourceId, hold.actorId(), hold.quantity(), now)))
-                                .flatMap(v -> telemetryPort.recordSuccess("reservable", resourceId + ":confirm"))
-                                .flatMap(v -> telemetryPort.recordDuration("reservable", resourceId, System.currentTimeMillis() - startTime))
-                                .map(v -> Either.<String, Reservation>right(reservation));
+                                .flatMap(v -> eventPublisher.publish(new HoldConfirmed<>(holdId, reservationId, resourceId, hold.actorId(), hold.quantity(), now)))
+                                .flatMap(v -> telemetryPort.recordSuccess("reservable", resourceId.toString() + ":confirm"))
+                                .flatMap(v -> telemetryPort.recordDuration("reservable", resourceId.toString(), System.currentTimeMillis() - startTime))
+                                .map(v -> Either.<String, Reservation<ID, Q>>right(reservation));
                         } else {
                             String reason = eitherRes.getLeft();
-                            return telemetryPort.recordFailure("reservable", resourceId + ":confirm", reason)
-                                .flatMap(v -> telemetryPort.recordDuration("reservable", resourceId, System.currentTimeMillis() - startTime))
-                                .map(v -> Either.<String, Reservation>left(reason));
+                            return telemetryPort.recordFailure("reservable", resourceId.toString() + ":confirm", reason)
+                                .flatMap(v -> telemetryPort.recordDuration("reservable", resourceId.toString(), System.currentTimeMillis() - startTime))
+                                .map(v -> Either.<String, Reservation<ID, Q>>left(reason));
                         }
                     });
             })
@@ -175,14 +175,14 @@ public final class ReservationProcess {
                     return IO.of(null); // Idempotent success
                 }
 
-                Hold hold = optHold.get();
-                String resourceId = hold.resourceId();
-                ReservableResource resource = resources.get(resourceId);
+                Hold<ID, Q> hold = optHold.get();
+                ID resourceId = hold.resourceId();
+                ReservableResource<ID, Q> resource = resources.get(resourceId);
 
                 return ledgerRepository.find(resourceId)
                     .flatMap(optLedger -> {
                         if (optLedger.isPresent() && resource != null) {
-                            ResourceLedger ledger = optLedger.get();
+                            ResourceLedger<ID, Q> ledger = optLedger.get();
                             ledger.recordRelease(holdId);
                             resource.onRelease(hold);
                             return ledgerRepository.save(resourceId, ledger);
@@ -190,7 +190,7 @@ public final class ReservationProcess {
                         return IO.of(null);
                     })
                     .flatMap(v -> holdRepository.remove(holdId))
-                    .flatMap(v -> eventPublisher.publish(new HoldReleased(holdId, resourceId, Instant.now())));
+                    .flatMap(v -> eventPublisher.publish(new HoldReleased<>(holdId, resourceId, Instant.now())));
             })
             .yield((optHold, result) -> result);
     }
@@ -207,14 +207,14 @@ public final class ReservationProcess {
                     return IO.of(null); // Idempotent success
                 }
 
-                Hold hold = optHold.get();
-                String resourceId = hold.resourceId();
-                ReservableResource resource = resources.get(resourceId);
+                Hold<ID, Q> hold = optHold.get();
+                ID resourceId = hold.resourceId();
+                ReservableResource<ID, Q> resource = resources.get(resourceId);
 
                 return ledgerRepository.find(resourceId)
                     .flatMap(optLedger -> {
                         if (optLedger.isPresent() && resource != null) {
-                            ResourceLedger ledger = optLedger.get();
+                            ResourceLedger<ID, Q> ledger = optLedger.get();
                             ledger.recordExpire(holdId);
                             resource.onExpire(hold);
                             return ledgerRepository.save(resourceId, ledger);
@@ -222,7 +222,7 @@ public final class ReservationProcess {
                         return IO.of(null);
                     })
                     .flatMap(v -> holdRepository.remove(holdId))
-                    .flatMap(v -> eventPublisher.publish(new HoldExpired(holdId, resourceId, Instant.now())));
+                    .flatMap(v -> eventPublisher.publish(new HoldExpired<>(holdId, resourceId, Instant.now())));
             })
             .yield((optHold, result) -> result);
     }

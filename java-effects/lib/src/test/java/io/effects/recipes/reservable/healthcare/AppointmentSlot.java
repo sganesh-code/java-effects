@@ -9,53 +9,68 @@ import java.time.Instant;
 import java.util.Optional;
 
 /**
- * Healthcare domain representation of a scarce, single-capacity clinician slot.
+ * Healthcare domain representation of a clinic calendar appointment slot.
  * It is completely stateless and synchronous! It contains NO monadic references (no IO)
  * or concurrency boilerplate, delegating bookkeeping to the ledger provided upon invocation.
  */
-public final class AppointmentSlot implements ReservableResource {
+public final class AppointmentSlot implements ReservableResource<String, Integer> {
     private final String slotId;
-    private final String clinicianName;
-    private final String specialty;
+    private final String doctorName;
 
-    public AppointmentSlot(String slotId, String clinicianName, String specialty) {
+    public AppointmentSlot(String slotId, String doctorName) {
         this.slotId = slotId;
-        this.clinicianName = clinicianName;
-        this.specialty = specialty;
+        this.doctorName = doctorName;
     }
 
     @Override
-    public Either<String, Hold> tryHold(ResourceLedger ledger, String holdId, String actorId, int quantity, Instant now, Instant expiresAt) {
+    public Either<String, Hold<String, Integer>> tryHold(
+        ResourceLedger<String, Integer> ledger, 
+        String holdId, 
+        String actorId, 
+        Integer quantity, 
+        Instant now, 
+        Instant expiresAt
+    ) {
         if (quantity != 1) {
             return Either.left("Cannot hold quantity other than 1 on a clinic appointment slot");
         }
-        Hold hold = new Hold(holdId, actorId, slotId, 1, expiresAt, Hold.Status.HELD);
-        
-        // Pure Domain Policy via Double Dispatch: the slot must be empty (active capacity == 0)
-        return ledger.recordHold(hold, now, (active, total) -> active == 0 
-            ? Optional.empty() 
-            : Optional.of("Appointment slot is already held or confirmed")
-        );
+
+        Hold<String, Integer> hold = new Hold<>(holdId, actorId, slotId, quantity, expiresAt, Hold.Status.HELD);
+
+        // Pure Domain Policy via Double Dispatch
+        return ledger.recordHold(hold, now, (holds, reservations) -> {
+            boolean hasActiveHold = holds.stream().anyMatch(h -> now.isBefore(h.expiresAt()));
+            boolean hasActiveReservation = !reservations.isEmpty();
+            if (hasActiveHold || hasActiveReservation) {
+                return Optional.of("Clinic appointment slot is already reserved or held: " + slotId);
+            }
+            return Optional.empty();
+        });
     }
 
     @Override
-    public Either<String, Reservation> tryConfirm(ResourceLedger ledger, Hold hold, String reservationId, Instant now) {
-        Reservation reservation = new Reservation(reservationId, hold.holdId(), hold.actorId(), slotId, 1, now);
-        
-        // Pure Domain Policy via Double Dispatch: the hold must still be in active HELD status
-        return ledger.recordConfirmation(hold, reservation, (total, h) -> h.status() == Hold.Status.HELD 
+    public Either<String, Reservation<String, Integer>> tryConfirm(
+        ResourceLedger<String, Integer> ledger, 
+        Hold<String, Integer> hold, 
+        String reservationId, 
+        Instant now
+    ) {
+        Reservation<String, Integer> reservation = new Reservation<>(reservationId, hold.holdId(), hold.actorId(), slotId, hold.quantity(), now);
+
+        // Pure Domain Policy via Double Dispatch
+        return ledger.recordConfirmation(hold, reservation, (reservations, h) -> h.status() == Hold.Status.HELD 
             ? Optional.empty() 
             : Optional.of("Invalid hold status")
         );
     }
 
     @Override
-    public void onRelease(Hold hold) {
+    public void onRelease(Hold<String, Integer> hold) {
         // Patient released slot -> Perform healthcare-specific side-effects directly
     }
 
     @Override
-    public void onExpire(Hold hold) {
+    public void onExpire(Hold<String, Integer> hold) {
         // Hold expired -> Perform clinic-specific side-effects directly
     }
 }

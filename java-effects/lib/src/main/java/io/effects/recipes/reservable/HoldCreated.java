@@ -5,11 +5,11 @@ import java.time.Instant;
 /**
  * Event published when a resource hold is successfully created.
  */
-public record HoldCreated(
+public record HoldCreated<ID, Q>(
     String holdId,
-    String resourceId,
+    ID resourceId,
     String actorId,
-    int quantity,
+    Q quantity,
     Instant expiresAt,
     Instant occurredAt
-) implements ReservationEvent {}
+) implements ReservationEvent<ID, Q> {}

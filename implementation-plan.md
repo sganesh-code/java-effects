@@ -78,7 +78,7 @@ The following tickets break down the comprehensive refactoring of the `java-effe
       - Add type parameters `<ID, Q>`.
       - Update signatures of `allocate`, `package`, `dispatch`, `complete`, and `release` to use `Q` details and propagate calls to the updated repository and ledger.
 
-- [ ] **🎟️ [TICKET-003]: Generalize `Reservable` Recipe to Support Custom Capacity Models**
+- [x] **🎟️ [TICKET-003]: Generalize `Reservable` Recipe to Support Custom Capacity Models**
   - **Description:** 
     Refactor the `Reservable` recipe to remove primitive `int quantity` assumptions. We will parameterize the entire package with generic types `<ID, Q>`, where `ID` represents the resource/hold/reservation identifier and `Q` is the consumer-defined capacity model (e.g., custom seat zones, booking blocks, or calendar intervals).
   - **Scope:**
@@ -89,22 +89,27 @@ The following tickets break down the comprehensive refactoring of the `java-effe
     - **Out of scope:**
       - Persistent thread scheduling (strictly focus on capacity bookkeeping).
   - **Implementation Tasks:**
-    - [ ] Update `@java-effects/lib/src/main/java/io/effects/recipes/reservable/Hold.java` to:
+    - [x] Update `@java-effects/lib/src/main/java/io/effects/recipes/reservable/Hold.java` to:
+      - *Refactored `Hold` record to add type parameters `<ID, Q>`, storing generic `ID resourceId` and `Q quantity` instead of primitive types.*
       - Add type parameters `<ID, Q>`.
       - Replace `String resourceId` with `ID resourceId` and `int quantity` with `Q quantity`.
-    - [ ] Update `@java-effects/lib/src/main/java/io/effects/recipes/reservable/Reservation.java` to:
+    - [x] Update `@java-effects/lib/src/main/java/io/effects/recipes/reservable/Reservation.java` to:
+      - *Refactored `Reservation` record to use type parameters `<ID, Q>`, storing generic `ID resourceId` and `Q quantity` instead of primitive types.*
       - Add type parameters `<ID, Q>`.
       - Replace identifiers and quantities with generic types `<ID, Q>`.
-    - [ ] Update `@java-effects/lib/src/main/java/io/effects/recipes/reservable/ReservableResource.java` to:
+    - [x] Update `@java-effects/lib/src/main/java/io/effects/recipes/reservable/ReservableResource.java` to:
+      - *Refactored `ReservableResource` interface to add generic types `<ID, Q>` and updated `tryHold` and `tryConfirm` method signatures.*
       - Add type parameters `<ID, Q>`.
       - Update `tryHold` and `tryConfirm` method signatures to accept generic `Q quantity` and the parameterized `ResourceLedger<ID, Q>`.
-    - [ ] Update `@java-effects/lib/src/main/java/io/effects/recipes/reservable/ResourceLedger.java` to:
+    - [x] Update `@java-effects/lib/src/main/java/io/effects/recipes/reservable/ResourceLedger.java` to:
+      - *Refactored `ResourceLedger` to be completely generic `<ID, Q>`. Removed `totalCapacity` property and changed double-dispatch verification callbacks to pass lists of active holds and reservations.*
       - Add type parameters `<ID, Q>`.
       - Remove `int totalCapacity` field.
       - Store holds/reservations in generic collections: `ConcurrentMap<String, Hold<ID, Q>>` and `ConcurrentMap<String, Reservation<ID, Q>>`.
       - Update `recordHold` to take a business policy of type `BiFunction<List<Hold<ID, Q>>, List<Reservation<ID, Q>>, Optional<String>>`.
       - Update `recordConfirmation` to take a policy of type `BiFunction<List<Reservation<ID, Q>>, Hold<ID, Q>, Optional<String>>`.
-    - [ ] Update `@java-effects/lib/src/main/java/io/effects/recipes/reservable/ReservationProcess.java` to:
+    - [x] Update `@java-effects/lib/src/main/java/io/effects/recipes/reservable/ReservationProcess.java` to:
+      - *Refactored `ReservationProcess` to use `<ID, Q>`, removing all capacity bounds from orchestration logic and matching the updated generic aggregate.*
       - Add type parameters `<ID, Q>`.
       - Update persistence, event publication, and process orchestration pipelines to propagate the parameterized `Hold<ID, Q>` and `Reservation<ID, Q>` objects.
 

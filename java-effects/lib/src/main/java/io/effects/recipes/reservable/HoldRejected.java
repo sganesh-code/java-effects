@@ -5,10 +5,10 @@ import java.time.Instant;
 /**
  * Event published when a resource hold request is rejected.
  */
-public record HoldRejected(
-    String resourceId,
+public record HoldRejected<ID, Q>(
+    ID resourceId,
     String actorId,
-    int quantity,
+    Q quantity,
     String reason,
     Instant occurredAt
-) implements ReservationEvent {}
+) implements ReservationEvent<ID, Q> {}

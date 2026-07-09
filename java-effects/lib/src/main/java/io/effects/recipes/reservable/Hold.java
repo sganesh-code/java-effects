@@ -5,11 +5,11 @@ import java.time.Instant;
 /**
  * An immutable record representing a temporary claim on a scarce resource.
  */
-public record Hold(
+public record Hold<ID, Q>(
     String holdId,
     String actorId,
-    String resourceId,
-    int quantity,
+    ID resourceId,
+    Q quantity,
     Instant expiresAt,
     Status status
 ) {
@@ -18,7 +18,7 @@ public record Hold(
     /**
      * Transitions this Hold into a new status.
      */
-    public Hold withStatus(Status newStatus) {
-        return new Hold(holdId, actorId, resourceId, quantity, expiresAt, newStatus);
+    public Hold<ID, Q> withStatus(Status newStatus) {
+        return new Hold<>(holdId, actorId, resourceId, quantity, expiresAt, newStatus);
     }
 }
