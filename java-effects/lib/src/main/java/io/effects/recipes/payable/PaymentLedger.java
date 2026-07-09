@@ -102,10 +102,7 @@ public final class PaymentLedger<ID, M> {
         Objects.requireNonNull(request);
         Objects.requireNonNull(now);
 
-        if (status == Status.CAPTURED) {
-            return Either.right(null); // Idempotent success
-        }
-        if (status != Status.AUTHORIZED) {
+        if (status != Status.AUTHORIZED && status != Status.CAPTURED) {
             return Either.left("Cannot capture payment in current status: " + status);
         }
 
