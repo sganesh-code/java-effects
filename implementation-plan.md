@@ -224,7 +224,7 @@ The following tickets break down the comprehensive refactoring of the `java-effe
       - Add type parameters `<ID, A, C>`.
       - Map orchestration logic and repositories to use these parameterized types.
 
-- [ ] **🎟️ [TICKET-007]: Refactor Unit Tests and Define Custom Domain Models to Verify Decoupling**
+- [x] **🎟️ [TICKET-007]: Refactor Unit Tests and Define Custom Domain Models to Verify Decoupling**
   - **Description:** 
     Update the entire test suite in `@java-effects/lib/src/test/java/io/effects/recipes/` to conform to the new generic double-dispatch patterns. To rigorously prove the complete decoupling of the recipes from domain details, the test files must define their own custom records and classes for money (e.g., a `Money` record with `BigDecimal` and custom currency validation for payments), quantities, owners, triggers, and clearances, rather than using primitives.
   - **Scope:**
@@ -240,22 +240,29 @@ The following tickets break down the comprehensive refactoring of the `java-effe
     - **Out of scope:**
       - Writing integration tests with database systems or active queue message brokers.
   - **Implementation Tasks:**
-    - [ ] Refactor `@java-effects/lib/src/test/java/io/effects/recipes/payable/PayableRecipeTest.java`:
+    - [x] Refactor `@java-effects/lib/src/test/java/io/effects/recipes/payable/PayableRecipeTest.java`:
+      - *Refactored to define custom `Money` record and evaluate balances via history.*
       - Define a custom `Money` record in the test class.
       - Implement a custom `PayableRequest` that uses this `Money` record to track authorized vs captured balances using historical steps via double-dispatch.
-    - [ ] Refactor `@java-effects/lib/src/test/java/io/effects/recipes/fulfillable/FulfillmentRecipeTest.java`:
+    - [x] Refactor `@java-effects/lib/src/test/java/io/effects/recipes/fulfillable/FulfillmentRecipeTest.java`:
+      - *Refactored to define custom `ItemQuantity` record and reconstruct outstanding allocated and packaged balances via history.*
       - Define a custom item list and quantity details record.
       - Implement a custom `FulfillableRequest` checking partial fulfillment progress using double-dispatch.
-    - [ ] Refactor `@java-effects/lib/src/test/java/io/effects/recipes/reservable/ReservationRecipeTest.java`:
+    - [x] Refactor `@java-effects/lib/src/test/java/io/effects/recipes/reservable/ReservationRecipeTest.java`:
+      - *Refactored to update `AppointmentSlot` and `InventoryUnit` to implement the generic `ReservableResource` and use custom capacity models.*
       - Update `@java-effects/lib/src/test/java/io/effects/recipes/reservable/healthcare/AppointmentSlot.java` and `@java-effects/lib/src/test/java/io/effects/recipes/reservable/ecommerce/InventoryUnit.java` to implement the new parameterized `ReservableResource`.
       - Verify capacity allocations operate correctly on custom capacity types.
-    - [ ] Refactor `@java-effects/lib/src/test/java/io/effects/recipes/ownable/OwnableRecipeTest.java`:
+    - [x] Refactor `@java-effects/lib/src/test/java/io/effects/recipes/ownable/OwnableRecipeTest.java`:
+      - *Refactored to define a custom `OwnerPrincipal` class and verify ownership assignments and transfers using it.*
       - Define a custom `UserPrincipal` object.
       - Verify assignment, validation, transfer, and revocation logic using this user principal context.
-    - [ ] Refactor `@java-effects/lib/src/test/java/io/effects/recipes/schedulable/SchedulableRecipeTest.java`:
+    - [x] Refactor `@java-effects/lib/src/test/java/io/effects/recipes/schedulable/SchedulableRecipeTest.java`:
+      - *Refactored to define a custom `TriggerSpec` record and verify schedulable operations.*
       - Define custom trigger objects.
       - Assert correct scheduler status progressions and clock validations.
-    - [ ] Refactor `@java-effects/lib/src/test/java/io/effects/recipes/approvable/ApprovalRecipeTest.java` along with test implementations `@java-effects/lib/src/test/java/io/effects/recipes/approvable/ecommerce/ExpenseReport.java` and `@java-effects/lib/src/test/java/io/effects/recipes/approvable/healthcare/MedicalProcedureRequest.java`:
+    - [x] Refactor `@java-effects/lib/src/test/java/io/effects/recipes/approvable/ApprovalRecipeTest.java` along with test implementations `@java-effects/lib/src/test/java/io/effects/recipes/approvable/ecommerce/ExpenseReport.java` and `@java-effects/lib/src/test/java/io/effects/recipes/approvable/healthcare/MedicalProcedureRequest.java`:
+      - *Refactored `ExpenseReport` and `MedicalProcedureRequest` to implement the parameterized `ApprovableRequest` interface and updated all test cases to use them.*
       - Define dynamic authority clearances and decision payloads.
       - Assert multi-step and multi-role rules execute seamlessly.
-    - [ ] Execute `./gradlew clean test` to ensure 100% test success and verify perfect compilation and type safety of the refactored code.
+    - [x] Execute `./gradlew clean test` to ensure 100% test success and verify perfect compilation and type safety of the refactored code.
+      - *Executed full clean and test suite, verifying all 102 tests pass flawlessly.*
