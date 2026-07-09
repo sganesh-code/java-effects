@@ -14,126 +14,126 @@ import java.util.UUID;
  * and immutable history of ownership adjustments.
  * It is an Aggregate Root that completely owns ownership state transitions and produces OwnershipEvents.
  */
-public final class OwnershipRecord {
-    private final String assetId;
-    private String currentOwnerId;
-    private final List<OwnershipStep> history = new ArrayList<>();
+public final class OwnershipRecord<ID, O> {
+    private final ID assetId;
+    private O currentOwner;
+    private final List<OwnershipStep<O>> history = new ArrayList<>();
 
-    public OwnershipRecord(String assetId) {
+    public OwnershipRecord(ID assetId) {
         this.assetId = Objects.requireNonNull(assetId);
     }
 
-    public synchronized String assetId() { return assetId; }
-    public synchronized String currentOwnerId() { return currentOwnerId; }
-    public synchronized List<OwnershipStep> history() { return Collections.unmodifiableList(new ArrayList<>(history)); }
+    public synchronized ID assetId() { return assetId; }
+    public synchronized O currentOwner() { return currentOwner; }
+    public synchronized List<OwnershipStep<O>> history() { return Collections.unmodifiableList(new ArrayList<>(history)); }
 
     public synchronized boolean hasOwner() {
-        return currentOwnerId != null;
+        return currentOwner != null;
     }
 
     /**
      * Records an ownership change and transitions the state of the record internally.
      */
-    private synchronized void recordTransfer(OwnershipStep step, String nextOwnerId) {
+    private synchronized void recordTransfer(OwnershipStep<O> step, O nextOwner) {
         Objects.requireNonNull(step);
         this.history.add(step);
-        this.currentOwnerId = nextOwnerId; // Null signifies revocation
+        this.currentOwner = nextOwner; // Null signifies revocation
     }
 
     /**
      * Behavioral Factory: Evaluates, assigns, and creates the OwnershipRecord.
      */
-    public static Either<String, TransitionResult<OwnershipRecord, OwnershipEvent>> assign(
-        String assetId, 
-        String ownerId, 
-        OwnableRequest asset, 
+    public static <ID, O> Either<String, TransitionResult<OwnershipRecord<ID, O>, OwnershipEvent<ID, O>>> assign(
+        ID assetId, 
+        O owner, 
+        OwnableRequest<ID, O> asset, 
         Instant now
     ) {
         Objects.requireNonNull(assetId);
-        Objects.requireNonNull(ownerId);
+        Objects.requireNonNull(owner);
         Objects.requireNonNull(asset);
         Objects.requireNonNull(now);
 
-        OwnershipRecord record = new OwnershipRecord(assetId);
+        OwnershipRecord<ID, O> record = new OwnershipRecord<>(assetId);
 
         // Domain validation
-        Either<String, Void> eitherValid = asset.evaluateInitialAssignment(ownerId, now);
+        Either<String, Void> eitherValid = asset.evaluateInitialAssignment(owner, now);
         if (eitherValid.isLeft()) {
             return Either.left(eitherValid.getLeft());
         }
 
-        OwnershipStep step = new OwnershipStep(
+        OwnershipStep<O> step = new OwnershipStep<>(
             UUID.randomUUID().toString(),
-            ownerId,
+            owner,
             OwnershipStep.Type.ASSIGN,
             "Initial ownership assignment",
             now
         );
-        record.recordTransfer(step, ownerId);
+        record.recordTransfer(step, owner);
 
-        OwnershipEvent event = new OwnershipAssigned(assetId, ownerId, now);
+        OwnershipEvent<ID, O> event = new OwnershipAssigned<>(assetId, owner, now);
         return Either.right(new TransitionResult<>(record, event));
     }
 
     /**
      * Behavioral Transition: Transfers ownership of an asset.
      */
-    public synchronized Either<String, OwnershipEvent> transfer(
-        String currentOwnerId, 
-        String proposedOwnerId, 
-        String actorId, 
+    public synchronized Either<String, OwnershipEvent<ID, O>> transfer(
+        O currentOwner, 
+        O proposedOwner, 
+        O actor, 
         String comment, 
-        OwnableRequest asset, 
+        OwnableRequest<ID, O> asset, 
         Instant now
     ) {
-        Objects.requireNonNull(currentOwnerId);
-        Objects.requireNonNull(proposedOwnerId);
-        Objects.requireNonNull(actorId);
+        Objects.requireNonNull(currentOwner);
+        Objects.requireNonNull(proposedOwner);
+        Objects.requireNonNull(actor);
         Objects.requireNonNull(comment);
         Objects.requireNonNull(asset);
         Objects.requireNonNull(now);
 
-        if (statusMatches(proposedOwnerId)) {
+        if (statusMatches(proposedOwner)) {
             return Either.right(null); // Idempotent success
         }
         if (!hasOwner()) {
             return Either.left("Cannot transfer: asset has no active owner");
         }
-        if (!this.currentOwnerId.equals(currentOwnerId)) {
-            return Either.left("Current owner mismatch: expected " + this.currentOwnerId + " but got " + currentOwnerId);
+        if (!this.currentOwner.equals(currentOwner)) {
+            return Either.left("Current owner mismatch: expected " + this.currentOwner + " but got " + currentOwner);
         }
 
         // Domain validation
-        Either<String, Void> eitherValid = asset.evaluateTransfer(this, currentOwnerId, proposedOwnerId, actorId, now);
+        Either<String, Void> eitherValid = asset.evaluateTransfer(this, currentOwner, proposedOwner, actor, now);
         if (eitherValid.isLeft()) {
             return Either.left(eitherValid.getLeft());
         }
 
-        OwnershipStep step = new OwnershipStep(
+        OwnershipStep<O> step = new OwnershipStep<>(
             UUID.randomUUID().toString(),
-            actorId,
+            actor,
             OwnershipStep.Type.TRANSFER,
             comment,
             now
         );
-        recordTransfer(step, proposedOwnerId);
+        recordTransfer(step, proposedOwner);
 
-        OwnershipEvent event = new OwnershipTransferred(assetId, currentOwnerId, proposedOwnerId, now);
+        OwnershipEvent<ID, O> event = new OwnershipTransferred<>(assetId, currentOwner, proposedOwner, now);
         return Either.right(event);
     }
 
     /**
      * Behavioral Transition: Revokes ownership of an asset.
      */
-    public synchronized Either<String, OwnershipEvent> revoke(
-        String currentOwnerId, 
-        String actorId, 
+    public synchronized Either<String, OwnershipEvent<ID, O>> revoke(
+        O currentOwner, 
+        O actor, 
         String reason, 
-        OwnableRequest asset, 
+        OwnableRequest<ID, O> asset, 
         Instant now
     ) {
-        Objects.requireNonNull(currentOwnerId);
-        Objects.requireNonNull(actorId);
+        Objects.requireNonNull(currentOwner);
+        Objects.requireNonNull(actor);
         Objects.requireNonNull(reason);
         Objects.requireNonNull(asset);
         Objects.requireNonNull(now);
@@ -141,30 +141,30 @@ public final class OwnershipRecord {
         if (!hasOwner()) {
             return Either.right(null); // Idempotent success
         }
-        if (!this.currentOwnerId.equals(currentOwnerId)) {
-            return Either.left("Current owner mismatch: expected " + this.currentOwnerId + " but got " + currentOwnerId);
+        if (!this.currentOwner.equals(currentOwner)) {
+            return Either.left("Current owner mismatch: expected " + this.currentOwner + " but got " + currentOwner);
         }
 
         // Domain validation
-        Either<String, Void> eitherValid = asset.evaluateTransfer(this, currentOwnerId, null, actorId, now);
+        Either<String, Void> eitherValid = asset.evaluateTransfer(this, currentOwner, null, actor, now);
         if (eitherValid.isLeft()) {
             return Either.left(eitherValid.getLeft());
         }
 
-        OwnershipStep step = new OwnershipStep(
+        OwnershipStep<O> step = new OwnershipStep<>(
             UUID.randomUUID().toString(),
-            actorId,
+            actor,
             OwnershipStep.Type.REVOKE,
             reason,
             now
         );
         recordTransfer(step, null);
 
-        OwnershipEvent event = new OwnershipRevoked(assetId, currentOwnerId, now);
+        OwnershipEvent<ID, O> event = new OwnershipRevoked<>(assetId, currentOwner, now);
         return Either.right(event);
     }
 
-    private synchronized boolean statusMatches(String proposedOwnerId) {
-        return currentOwnerId != null && currentOwnerId.equals(proposedOwnerId);
+    private synchronized boolean statusMatches(O proposedOwner) {
+        return currentOwner != null && currentOwner.equals(proposedOwner);
     }
 }

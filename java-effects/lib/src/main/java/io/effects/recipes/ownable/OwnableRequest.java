@@ -11,12 +11,12 @@ import java.time.Instant;
  * The monadic shell (OwnableProcess) is responsible for lifting these pure synchronous
  * evaluations safely into the lazy, concurrent IO context.
  */
-public interface OwnableRequest {
+public interface OwnableRequest<ID, O> {
 
     /**
      * Behavioral Message: Evaluates whether an initial owner assignment is allowed under current rules.
      */
-    Either<String, Void> evaluateInitialAssignment(String ownerId, Instant now);
+    Either<String, Void> evaluateInitialAssignment(O owner, Instant now);
 
     /**
      * Behavioral Message: Evaluates a proposed transfer or revocation.
@@ -24,10 +24,10 @@ public interface OwnableRequest {
      * whether the transition is valid.
      */
     Either<String, Void> evaluateTransfer(
-        OwnershipRecord record,
-        String currentOwnerId,
-        String proposedOwnerId,
-        String actorId,
+        OwnershipRecord<ID, O> record,
+        O currentOwner,
+        O proposedOwner,
+        O actor,
         Instant now
     );
 }

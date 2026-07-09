@@ -21,11 +21,11 @@ import java.util.concurrent.ConcurrentMap;
  * It coordinates monadic persistence lookup, domain aggregation, and event publishing,
  * completely decoupled from business logic invariants (which reside inside OwnershipRecord).
  */
-public final class OwnableProcess {
-    private final StateRepository<String, OwnershipRecord> repository;
-    private final EventPublisher<OwnershipEvent> publisher;
+public final class OwnableProcess<ID, O> {
+    private final StateRepository<ID, OwnershipRecord<ID, O>> repository;
+    private final EventPublisher<OwnershipEvent<ID, O>> publisher;
     private final TelemetryPort telemetry;
-    private final ConcurrentMap<String, OwnableRequest> assets = new ConcurrentHashMap<>();
+    private final ConcurrentMap<ID, OwnableRequest<ID, O>> assets = new ConcurrentHashMap<>();
 
     /**
      * Default constructor uses the in-memory adapters for robust backward compatibility.
@@ -38,8 +38,8 @@ public final class OwnableProcess {
      * Dependency injection constructor to configure custom ports/adapters at runtime.
      */
     public OwnableProcess(
-        StateRepository<String, OwnershipRecord> repository,
-        EventPublisher<OwnershipEvent> publisher,
+        StateRepository<ID, OwnershipRecord<ID, O>> repository,
+        EventPublisher<OwnershipEvent<ID, O>> publisher,
         TelemetryPort telemetry
     ) {
         this.repository = Objects.requireNonNull(repository);
@@ -50,7 +50,7 @@ public final class OwnableProcess {
     /**
      * Registers a behavioral ownable request domain object.
      */
-    public IO<Void> register(String assetId, OwnableRequest asset) {
+    public IO<Void> register(ID assetId, OwnableRequest<ID, O> asset) {
         Objects.requireNonNull(assetId);
         Objects.requireNonNull(asset);
         return IO.delay(() -> {
@@ -62,12 +62,12 @@ public final class OwnableProcess {
     /**
      * Assigns the initial owner to an asset.
      */
-    public IO<Either<String, OwnershipRecord>> assignOwner(String assetId, String ownerId, Instant now) {
+    public IO<Either<String, OwnershipRecord<ID, O>>> assignOwner(ID assetId, O owner, Instant now) {
         Objects.requireNonNull(assetId);
-        Objects.requireNonNull(ownerId);
+        Objects.requireNonNull(owner);
         Objects.requireNonNull(now);
 
-        OwnableRequest asset = assets.get(assetId);
+        OwnableRequest<ID, O> asset = assets.get(assetId);
         if (asset == null) {
             return IO.of(Either.left("Asset domain object not registered: " + assetId));
         }
@@ -76,27 +76,27 @@ public final class OwnableProcess {
             .bind(startTime -> repository.find(assetId))
             .bind((startTime, optRecord) -> {
                 if (optRecord.isPresent() && optRecord.get().hasOwner()) {
-                    return IO.of(Either.<String, OwnershipRecord>left("Asset already has an active owner: " + optRecord.get().currentOwnerId()));
+                    return IO.of(Either.<String, OwnershipRecord<ID, O>>left("Asset already has an active owner: " + optRecord.get().currentOwner()));
                 }
 
                 // Delegate creation and transition to rich aggregate factory
-                Either<String, TransitionResult<OwnershipRecord, OwnershipEvent>> assignResult = OwnershipRecord.assign(
-                    assetId, ownerId, asset, now
+                Either<String, TransitionResult<OwnershipRecord<ID, O>, OwnershipEvent<ID, O>>> assignResult = OwnershipRecord.assign(
+                    assetId, owner, asset, now
                 );
 
                 if (assignResult.isLeft()) {
-                    return IO.of(Either.<String, OwnershipRecord>left(assignResult.getLeft()));
+                    return IO.of(Either.<String, OwnershipRecord<ID, O>>left(assignResult.getLeft()));
                 }
 
-                TransitionResult<OwnershipRecord, OwnershipEvent> result = assignResult.getRight();
-                OwnershipRecord record = result.aggregate();
-                OwnershipEvent event = result.event();
+                TransitionResult<OwnershipRecord<ID, O>, OwnershipEvent<ID, O>> result = assignResult.getRight();
+                OwnershipRecord<ID, O> record = result.aggregate();
+                OwnershipEvent<ID, O> event = result.event();
 
                 return repository.save(assetId, record)
                     .flatMap(v -> publisher.publish(event))
-                    .flatMap(v -> telemetry.recordSuccess("ownable", assetId + ":assign"))
-                    .flatMap(v -> telemetry.recordDuration("ownable", assetId, System.currentTimeMillis() - startTime))
-                    .map(v -> Either.<String, OwnershipRecord>right(record));
+                    .flatMap(v -> telemetry.recordSuccess("ownable", assetId.toString() + ":assign"))
+                    .flatMap(v -> telemetry.recordDuration("ownable", assetId.toString(), System.currentTimeMillis() - startTime))
+                    .map(v -> Either.<String, OwnershipRecord<ID, O>>right(record));
             })
             .yield((startTime, optRecord, result) -> result);
     }
@@ -104,22 +104,22 @@ public final class OwnableProcess {
     /**
      * Transfers ownership from the current owner to a proposed owner.
      */
-    public IO<Either<String, OwnershipRecord>> transferOwner(
-        String assetId, 
-        String currentOwnerId, 
-        String proposedOwnerId, 
-        String actorId, 
+    public IO<Either<String, OwnershipRecord<ID, O>>> transferOwner(
+        ID assetId, 
+        O currentOwner, 
+        O proposedOwner, 
+        O actor, 
         String comment, 
         Instant now
     ) {
         Objects.requireNonNull(assetId);
-        Objects.requireNonNull(currentOwnerId);
-        Objects.requireNonNull(proposedOwnerId);
-        Objects.requireNonNull(actorId);
+        Objects.requireNonNull(currentOwner);
+        Objects.requireNonNull(proposedOwner);
+        Objects.requireNonNull(actor);
         Objects.requireNonNull(comment);
         Objects.requireNonNull(now);
 
-        OwnableRequest asset = assets.get(assetId);
+        OwnableRequest<ID, O> asset = assets.get(assetId);
         if (asset == null) {
             return IO.of(Either.left("Asset domain object not registered: " + assetId));
         }
@@ -128,25 +128,25 @@ public final class OwnableProcess {
             .bind(startTime -> repository.find(assetId))
             .bind((startTime, optRecord) -> {
                 if (optRecord.isEmpty()) {
-                    return IO.of(Either.<String, OwnershipRecord>left("Ownership record not found for asset: " + assetId));
+                    return IO.of(Either.<String, OwnershipRecord<ID, O>>left("Ownership record not found for asset: " + assetId));
                 }
 
-                OwnershipRecord record = optRecord.get();
+                OwnershipRecord<ID, O> record = optRecord.get();
 
                 // Delegate execution directly to rich aggregate!
-                Either<String, OwnershipEvent> eitherEvent = record.transfer(currentOwnerId, proposedOwnerId, actorId, comment, asset, now);
+                Either<String, OwnershipEvent<ID, O>> eitherEvent = record.transfer(currentOwner, proposedOwner, actor, comment, asset, now);
                 if (eitherEvent.isLeft()) {
-                    return IO.of(Either.<String, OwnershipRecord>left(eitherEvent.getLeft()));
+                    return IO.of(Either.<String, OwnershipRecord<ID, O>>left(eitherEvent.getLeft()));
                 }
 
-                OwnershipEvent event = eitherEvent.getRight();
+                OwnershipEvent<ID, O> event = eitherEvent.getRight();
                 IO<Void> publishIO = event != null ? publisher.publish(event) : IO.of(null);
 
                 return repository.save(assetId, record)
                     .flatMap(v -> publishIO)
-                    .flatMap(v -> telemetry.recordSuccess("ownable", assetId + ":transfer"))
-                    .flatMap(v -> telemetry.recordDuration("ownable", assetId, System.currentTimeMillis() - startTime))
-                    .map(v -> Either.<String, OwnershipRecord>right(record));
+                    .flatMap(v -> telemetry.recordSuccess("ownable", assetId.toString() + ":transfer"))
+                    .flatMap(v -> telemetry.recordDuration("ownable", assetId.toString(), System.currentTimeMillis() - startTime))
+                    .map(v -> Either.<String, OwnershipRecord<ID, O>>right(record));
             })
             .yield((startTime, optRecord, result) -> result);
     }
@@ -154,20 +154,20 @@ public final class OwnableProcess {
     /**
      * Revokes ownership from the current owner.
      */
-    public IO<Either<String, OwnershipRecord>> revokeOwner(
-        String assetId, 
-        String currentOwnerId, 
-        String actorId, 
+    public IO<Either<String, OwnershipRecord<ID, O>>> revokeOwner(
+        ID assetId, 
+        O currentOwner, 
+        O actor, 
         String reason, 
         Instant now
     ) {
         Objects.requireNonNull(assetId);
-        Objects.requireNonNull(currentOwnerId);
-        Objects.requireNonNull(actorId);
+        Objects.requireNonNull(currentOwner);
+        Objects.requireNonNull(actor);
         Objects.requireNonNull(reason);
         Objects.requireNonNull(now);
 
-        OwnableRequest asset = assets.get(assetId);
+        OwnableRequest<ID, O> asset = assets.get(assetId);
         if (asset == null) {
             return IO.of(Either.left("Asset domain object not registered: " + assetId));
         }
@@ -176,25 +176,25 @@ public final class OwnableProcess {
             .bind(startTime -> repository.find(assetId))
             .bind((startTime, optRecord) -> {
                 if (optRecord.isEmpty()) {
-                    return IO.of(Either.<String, OwnershipRecord>left("Ownership record not found for asset: " + assetId));
+                    return IO.of(Either.<String, OwnershipRecord<ID, O>>left("Ownership record not found for asset: " + assetId));
                 }
 
-                OwnershipRecord record = optRecord.get();
+                OwnershipRecord<ID, O> record = optRecord.get();
 
                 // Delegate execution directly to rich aggregate!
-                Either<String, OwnershipEvent> eitherEvent = record.revoke(currentOwnerId, actorId, reason, asset, now);
+                Either<String, OwnershipEvent<ID, O>> eitherEvent = record.revoke(currentOwner, actor, reason, asset, now);
                 if (eitherEvent.isLeft()) {
-                    return IO.of(Either.<String, OwnershipRecord>left(eitherEvent.getLeft()));
+                    return IO.of(Either.<String, OwnershipRecord<ID, O>>left(eitherEvent.getLeft()));
                 }
 
-                OwnershipEvent event = eitherEvent.getRight();
+                OwnershipEvent<ID, O> event = eitherEvent.getRight();
                 IO<Void> publishIO = event != null ? publisher.publish(event) : IO.of(null);
 
                 return repository.save(assetId, record)
                     .flatMap(v -> publishIO)
-                    .flatMap(v -> telemetry.recordSuccess("ownable", assetId + ":revoke"))
-                    .flatMap(v -> telemetry.recordDuration("ownable", assetId, System.currentTimeMillis() - startTime))
-                    .map(v -> Either.<String, OwnershipRecord>right(record));
+                    .flatMap(v -> telemetry.recordSuccess("ownable", assetId.toString() + ":revoke"))
+                    .flatMap(v -> telemetry.recordDuration("ownable", assetId.toString(), System.currentTimeMillis() - startTime))
+                    .map(v -> Either.<String, OwnershipRecord<ID, O>>right(record));
             })
             .yield((startTime, optRecord, result) -> result);
     }

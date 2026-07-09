@@ -113,7 +113,7 @@ The following tickets break down the comprehensive refactoring of the `java-effe
       - Add type parameters `<ID, Q>`.
       - Update persistence, event publication, and process orchestration pipelines to propagate the parameterized `Hold<ID, Q>` and `Reservation<ID, Q>` objects.
 
-- [ ] **🎟️ [TICKET-004]: Generalize `Ownable` Recipe to Support Custom Owner Contexts**
+- [x] **🎟️ [TICKET-004]: Generalize `Ownable` Recipe to Support Custom Owner Contexts**
   - **Description:** 
     Refactor the `Ownable` recipe to remove raw `String ownerId` and `String actorId` assumptions. We will parameterize the entire package with generic types `<ID, O>`, where `ID` represents the asset identifier type and `O` represents the consumer's custom owner context model (e.g., a multi-tenant corporate hierarchy, user group, or cryptographic signature principal).
   - **Scope:**
@@ -123,23 +123,28 @@ The following tickets break down the comprehensive refactoring of the `java-effe
     - **Out of scope:**
       - Authentication and directory server lookups.
   - **Implementation Tasks:**
-    - [ ] Update `@java-effects/lib/src/main/java/io/effects/recipes/ownable/OwnershipStep.java` to:
+    - [x] Update `@java-effects/lib/src/main/java/io/effects/recipes/ownable/OwnershipStep.java` to:
+      - *Refactored `OwnershipStep` to be parameterized by `<O>` and renamed raw string actorId to generic `O owner`.*
       - Add type parameter `<O>`.
       - Replace `String ownerId` with `O owner`.
-    - [ ] Update `@java-effects/lib/src/main/java/io/effects/recipes/ownable/OwnershipEvent.java` and its sub-classes (`OwnershipAssigned`, `OwnershipTransferred`, `OwnershipRevoked`):
+    - [x] Update `@java-effects/lib/src/main/java/io/effects/recipes/ownable/OwnershipEvent.java` and its sub-classes (`OwnershipAssigned`, `OwnershipTransferred`, `OwnershipRevoked`):
+      - *Refactored `OwnershipEvent` and all implementing records (`OwnershipAssigned`, `OwnershipTransferred`, `OwnershipRevoked`) to be generic `<ID, O>`, removing primitive/raw string properties.*
       - Add type parameters `<ID, O>`.
       - Store generic `ID assetId` and `O owner` instead of strings.
-    - [ ] Update `@java-effects/lib/src/main/java/io/effects/recipes/ownable/OwnableRequest.java` to:
+    - [x] Update `@java-effects/lib/src/main/java/io/effects/recipes/ownable/OwnableRequest.java` to:
+      - *Refactored `OwnableRequest` interface to add generic types `<ID, O>` and updated all evaluate methods.*
       - Add type parameters `<ID, O>`.
       - Refactor signatures to:
         - `Either<String, Void> evaluateInitialAssignment(O owner, Instant now);`
         - `Either<String, Void> evaluateTransfer(OwnershipRecord<ID, O> record, O currentOwner, O proposedOwner, O actor, Instant now);`
-    - [ ] Update `@java-effects/lib/src/main/java/io/effects/recipes/ownable/OwnershipRecord.java` to:
+    - [x] Update `@java-effects/lib/src/main/java/io/effects/recipes/ownable/OwnershipRecord.java` to:
+      - *Refactored `OwnershipRecord` to be generic `<ID, O>`, storing generic identifiers and owner contexts, and delegating transfer evaluations via double-dispatch.*
       - Add type parameters `<ID, O>`.
       - Replace `String assetId` with `ID assetId` and `String currentOwnerId` with `O currentOwner`.
       - Use `List<OwnershipStep<O>> history`.
       - Delegate all validation to `OwnableRequest<ID, O>` passing `this` ledger context via double-dispatch.
-    - [ ] Update `@java-effects/lib/src/main/java/io/effects/recipes/ownable/OwnableProcess.java` to:
+    - [x] Update `@java-effects/lib/src/main/java/io/effects/recipes/ownable/OwnableProcess.java` to:
+      - *Refactored `OwnableProcess` to be parameterized by `<ID, O>` and propagated generic owner models across all state mappings and events.*
       - Add type parameters `<ID, O>`.
       - Map state management, events publishing, and telemetry ports to handle `<ID, O>` types.
 

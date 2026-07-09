@@ -5,12 +5,12 @@ import java.time.Instant;
 /**
  * A historical domain fact representing a lifecycle event of the ownership recipe.
  */
-public interface OwnershipEvent {
+public interface OwnershipEvent<ID, O> {
 
     /**
      * Unique identifier of the owned asset.
      */
-    String assetId();
+    ID assetId();
 
     /**
      * The timestamp of when the event occurred.
