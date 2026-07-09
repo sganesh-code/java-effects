@@ -19,11 +19,11 @@ import java.util.concurrent.ConcurrentMap;
  * It coordinates monadic persistence lookup, domain aggregation, and event publishing,
  * completely decoupled from business logic invariants (which reside inside FulfillmentLedger).
  */
-public final class FulfillmentProcess {
-    private final StateRepository<String, FulfillmentLedger> repository;
-    private final EventPublisher<FulfillmentEvent> publisher;
+public final class FulfillmentProcess<ID, Q> {
+    private final StateRepository<ID, FulfillmentLedger<ID, Q>> repository;
+    private final EventPublisher<FulfillmentEvent<ID, Q>> publisher;
     private final TelemetryPort telemetry;
-    private final ConcurrentMap<String, FulfillableRequest> fulfillments = new ConcurrentHashMap<>();
+    private final ConcurrentMap<ID, FulfillableRequest<ID, Q>> fulfillments = new ConcurrentHashMap<>();
 
     /**
      * Default constructor uses the in-memory adapters for robust backward compatibility.
@@ -36,8 +36,8 @@ public final class FulfillmentProcess {
      * Dependency injection constructor to configure custom ports/adapters at runtime.
      */
     public FulfillmentProcess(
-        StateRepository<String, FulfillmentLedger> repository,
-        EventPublisher<FulfillmentEvent> publisher,
+        StateRepository<ID, FulfillmentLedger<ID, Q>> repository,
+        EventPublisher<FulfillmentEvent<ID, Q>> publisher,
         TelemetryPort telemetry
     ) {
         this.repository = Objects.requireNonNull(repository);
@@ -48,7 +48,7 @@ public final class FulfillmentProcess {
     /**
      * Registers a behavioral fulfillment request domain object.
      */
-    public IO<Void> register(String fulfillmentId, FulfillableRequest request) {
+    public IO<Void> register(ID fulfillmentId, FulfillableRequest<ID, Q> request) {
         Objects.requireNonNull(fulfillmentId);
         Objects.requireNonNull(request);
         return IO.delay(() -> {
@@ -60,21 +60,21 @@ public final class FulfillmentProcess {
     /**
      * Creates/Initiates a new fulfillment ledger.
      */
-    public IO<Void> initiate(String fulfillmentId, int totalQuantity) {
+    public IO<Void> initiate(ID fulfillmentId) {
         Objects.requireNonNull(fulfillmentId);
-        return repository.save(fulfillmentId, FulfillmentLedger.initiate(fulfillmentId, totalQuantity));
+        return repository.save(fulfillmentId, FulfillmentLedger.initiate(fulfillmentId));
     }
 
     /**
      * Allocates items to a fulfillment order.
      */
-    public IO<Either<String, FulfillmentLedger>> allocate(String fulfillmentId, String actorId, int quantity, String comment, Instant now) {
+    public IO<Either<String, FulfillmentLedger<ID, Q>>> allocate(ID fulfillmentId, String actorId, Q detail, String comment, Instant now) {
         Objects.requireNonNull(fulfillmentId);
         Objects.requireNonNull(actorId);
         Objects.requireNonNull(comment);
         Objects.requireNonNull(now);
 
-        FulfillableRequest request = fulfillments.get(fulfillmentId);
+        FulfillableRequest<ID, Q> request = fulfillments.get(fulfillmentId);
         if (request == null) {
             return IO.of(Either.left("Fulfillment domain object not registered: " + fulfillmentId));
         }
@@ -83,25 +83,25 @@ public final class FulfillmentProcess {
             .bind(startTime -> repository.find(fulfillmentId))
             .bind((startTime, optLedger) -> {
                 if (optLedger.isEmpty()) {
-                    return IO.of(Either.<String, FulfillmentLedger>left("Fulfillment ledger not found: " + fulfillmentId));
+                    return IO.of(Either.<String, FulfillmentLedger<ID, Q>>left("Fulfillment ledger not found: " + fulfillmentId));
                 }
 
-                FulfillmentLedger ledger = optLedger.get();
+                FulfillmentLedger<ID, Q> ledger = optLedger.get();
 
                 // Delegate execution directly to rich aggregate!
-                Either<String, FulfillmentEvent> eitherEvent = ledger.allocate(actorId, quantity, comment, request, now);
+                Either<String, FulfillmentEvent<ID, Q>> eitherEvent = ledger.allocate(actorId, detail, comment, request, now);
                 if (eitherEvent.isLeft()) {
-                    return IO.of(Either.<String, FulfillmentLedger>left(eitherEvent.getLeft()));
+                    return IO.of(Either.<String, FulfillmentLedger<ID, Q>>left(eitherEvent.getLeft()));
                 }
 
-                FulfillmentEvent event = eitherEvent.getRight();
+                FulfillmentEvent<ID, Q> event = eitherEvent.getRight();
                 IO<Void> publishIO = event != null ? publisher.publish(event) : IO.of(null);
 
                 return repository.save(fulfillmentId, ledger)
                     .flatMap(v -> publishIO)
-                    .flatMap(v -> telemetry.recordSuccess("fulfillable", fulfillmentId + ":allocate"))
-                    .flatMap(v -> telemetry.recordDuration("fulfillable", fulfillmentId, System.currentTimeMillis() - startTime))
-                    .map(v -> Either.<String, FulfillmentLedger>right(ledger));
+                    .flatMap(v -> telemetry.recordSuccess("fulfillable", fulfillmentId.toString() + ":allocate"))
+                    .flatMap(v -> telemetry.recordDuration("fulfillable", fulfillmentId.toString(), System.currentTimeMillis() - startTime))
+                    .map(v -> Either.<String, FulfillmentLedger<ID, Q>>right(ledger));
             })
             .yield((startTime, optLedger, result) -> result);
     }
@@ -109,13 +109,13 @@ public final class FulfillmentProcess {
     /**
      * Packages allocated items.
      */
-    public IO<Either<String, FulfillmentLedger>> packageItems(String fulfillmentId, String actorId, int quantity, String comment, Instant now) {
+    public IO<Either<String, FulfillmentLedger<ID, Q>>> packageItems(ID fulfillmentId, String actorId, Q detail, String comment, Instant now) {
         Objects.requireNonNull(fulfillmentId);
         Objects.requireNonNull(actorId);
         Objects.requireNonNull(comment);
         Objects.requireNonNull(now);
 
-        FulfillableRequest request = fulfillments.get(fulfillmentId);
+        FulfillableRequest<ID, Q> request = fulfillments.get(fulfillmentId);
         if (request == null) {
             return IO.of(Either.left("Fulfillment domain object not registered: " + fulfillmentId));
         }
@@ -124,25 +124,25 @@ public final class FulfillmentProcess {
             .bind(startTime -> repository.find(fulfillmentId))
             .bind((startTime, optLedger) -> {
                 if (optLedger.isEmpty()) {
-                    return IO.of(Either.<String, FulfillmentLedger>left("Fulfillment ledger not found: " + fulfillmentId));
+                    return IO.of(Either.<String, FulfillmentLedger<ID, Q>>left("Fulfillment ledger not found: " + fulfillmentId));
                 }
 
-                FulfillmentLedger ledger = optLedger.get();
+                FulfillmentLedger<ID, Q> ledger = optLedger.get();
 
                 // Delegate execution directly to rich aggregate!
-                Either<String, FulfillmentEvent> eitherEvent = ledger.packageItems(actorId, quantity, comment, request, now);
+                Either<String, FulfillmentEvent<ID, Q>> eitherEvent = ledger.packageItems(actorId, detail, comment, request, now);
                 if (eitherEvent.isLeft()) {
-                    return IO.of(Either.<String, FulfillmentLedger>left(eitherEvent.getLeft()));
+                    return IO.of(Either.<String, FulfillmentLedger<ID, Q>>left(eitherEvent.getLeft()));
                 }
 
-                FulfillmentEvent event = eitherEvent.getRight();
+                FulfillmentEvent<ID, Q> event = eitherEvent.getRight();
                 IO<Void> publishIO = event != null ? publisher.publish(event) : IO.of(null);
 
                 return repository.save(fulfillmentId, ledger)
                     .flatMap(v -> publishIO)
-                    .flatMap(v -> telemetry.recordSuccess("fulfillable", fulfillmentId + ":package"))
-                    .flatMap(v -> telemetry.recordDuration("fulfillable", fulfillmentId, System.currentTimeMillis() - startTime))
-                    .map(v -> Either.<String, FulfillmentLedger>right(ledger));
+                    .flatMap(v -> telemetry.recordSuccess("fulfillable", fulfillmentId.toString() + ":package"))
+                    .flatMap(v -> telemetry.recordDuration("fulfillable", fulfillmentId.toString(), System.currentTimeMillis() - startTime))
+                    .map(v -> Either.<String, FulfillmentLedger<ID, Q>>right(ledger));
             })
             .yield((startTime, optLedger, result) -> result);
     }
@@ -150,13 +150,13 @@ public final class FulfillmentProcess {
     /**
      * Dispatches packaged items.
      */
-    public IO<Either<String, FulfillmentLedger>> dispatch(String fulfillmentId, String actorId, String comment, Instant now) {
+    public IO<Either<String, FulfillmentLedger<ID, Q>>> dispatch(ID fulfillmentId, String actorId, String comment, Instant now) {
         Objects.requireNonNull(fulfillmentId);
         Objects.requireNonNull(actorId);
         Objects.requireNonNull(comment);
         Objects.requireNonNull(now);
 
-        FulfillableRequest request = fulfillments.get(fulfillmentId);
+        FulfillableRequest<ID, Q> request = fulfillments.get(fulfillmentId);
         if (request == null) {
             return IO.of(Either.left("Fulfillment domain object not registered: " + fulfillmentId));
         }
@@ -165,25 +165,25 @@ public final class FulfillmentProcess {
             .bind(startTime -> repository.find(fulfillmentId))
             .bind((startTime, optLedger) -> {
                 if (optLedger.isEmpty()) {
-                    return IO.of(Either.<String, FulfillmentLedger>left("Fulfillment ledger not found: " + fulfillmentId));
+                    return IO.of(Either.<String, FulfillmentLedger<ID, Q>>left("Fulfillment ledger not found: " + fulfillmentId));
                 }
 
-                FulfillmentLedger ledger = optLedger.get();
+                FulfillmentLedger<ID, Q> ledger = optLedger.get();
 
                 // Delegate execution directly to rich aggregate!
-                Either<String, FulfillmentEvent> eitherEvent = ledger.dispatch(actorId, comment, request, now);
+                Either<String, FulfillmentEvent<ID, Q>> eitherEvent = ledger.dispatch(actorId, comment, request, now);
                 if (eitherEvent.isLeft()) {
-                    return IO.of(Either.<String, FulfillmentLedger>left(eitherEvent.getLeft()));
+                    return IO.of(Either.<String, FulfillmentLedger<ID, Q>>left(eitherEvent.getLeft()));
                 }
 
-                FulfillmentEvent event = eitherEvent.getRight();
+                FulfillmentEvent<ID, Q> event = eitherEvent.getRight();
                 IO<Void> publishIO = event != null ? publisher.publish(event) : IO.of(null);
 
                 return repository.save(fulfillmentId, ledger)
                     .flatMap(v -> publishIO)
-                    .flatMap(v -> telemetry.recordSuccess("fulfillable", fulfillmentId + ":dispatch"))
-                    .flatMap(v -> telemetry.recordDuration("fulfillable", fulfillmentId, System.currentTimeMillis() - startTime))
-                    .map(v -> Either.<String, FulfillmentLedger>right(ledger));
+                    .flatMap(v -> telemetry.recordSuccess("fulfillable", fulfillmentId.toString() + ":dispatch"))
+                    .flatMap(v -> telemetry.recordDuration("fulfillable", fulfillmentId.toString(), System.currentTimeMillis() - startTime))
+                    .map(v -> Either.<String, FulfillmentLedger<ID, Q>>right(ledger));
             })
             .yield((startTime, optLedger, result) -> result);
     }
@@ -191,13 +191,13 @@ public final class FulfillmentProcess {
     /**
      * Completes fulfillment/delivery.
      */
-    public IO<Either<String, FulfillmentLedger>> complete(String fulfillmentId, String actorId, String comment, Instant now) {
+    public IO<Either<String, FulfillmentLedger<ID, Q>>> complete(ID fulfillmentId, String actorId, String comment, Instant now) {
         Objects.requireNonNull(fulfillmentId);
         Objects.requireNonNull(actorId);
         Objects.requireNonNull(comment);
         Objects.requireNonNull(now);
 
-        FulfillableRequest request = fulfillments.get(fulfillmentId);
+        FulfillableRequest<ID, Q> request = fulfillments.get(fulfillmentId);
         if (request == null) {
             return IO.of(Either.left("Fulfillment domain object not registered: " + fulfillmentId));
         }
@@ -206,25 +206,25 @@ public final class FulfillmentProcess {
             .bind(startTime -> repository.find(fulfillmentId))
             .bind((startTime, optLedger) -> {
                 if (optLedger.isEmpty()) {
-                    return IO.of(Either.<String, FulfillmentLedger>left("Fulfillment ledger not found: " + fulfillmentId));
+                    return IO.of(Either.<String, FulfillmentLedger<ID, Q>>left("Fulfillment ledger not found: " + fulfillmentId));
                 }
 
-                FulfillmentLedger ledger = optLedger.get();
+                FulfillmentLedger<ID, Q> ledger = optLedger.get();
 
                 // Delegate execution directly to rich aggregate!
-                Either<String, FulfillmentEvent> eitherEvent = ledger.complete(actorId, comment, request, now);
+                Either<String, FulfillmentEvent<ID, Q>> eitherEvent = ledger.complete(actorId, comment, request, now);
                 if (eitherEvent.isLeft()) {
-                    return IO.of(Either.<String, FulfillmentLedger>left(eitherEvent.getLeft()));
+                    return IO.of(Either.<String, FulfillmentLedger<ID, Q>>left(eitherEvent.getLeft()));
                 }
 
-                FulfillmentEvent event = eitherEvent.getRight();
+                FulfillmentEvent<ID, Q> event = eitherEvent.getRight();
                 IO<Void> publishIO = event != null ? publisher.publish(event) : IO.of(null);
 
                 return repository.save(fulfillmentId, ledger)
                     .flatMap(v -> publishIO)
-                    .flatMap(v -> telemetry.recordSuccess("fulfillable", fulfillmentId + ":complete"))
-                    .flatMap(v -> telemetry.recordDuration("fulfillable", fulfillmentId, System.currentTimeMillis() - startTime))
-                    .map(v -> Either.<String, FulfillmentLedger>right(ledger));
+                    .flatMap(v -> telemetry.recordSuccess("fulfillable", fulfillmentId.toString() + ":complete"))
+                    .flatMap(v -> telemetry.recordDuration("fulfillable", fulfillmentId.toString(), System.currentTimeMillis() - startTime))
+                    .map(v -> Either.<String, FulfillmentLedger<ID, Q>>right(ledger));
             })
             .yield((startTime, optLedger, result) -> result);
     }
@@ -232,13 +232,13 @@ public final class FulfillmentProcess {
     /**
      * Releases allocated or packaged items back to inventory.
      */
-    public IO<Either<String, FulfillmentLedger>> release(String fulfillmentId, String actorId, int quantity, String comment, Instant now) {
+    public IO<Either<String, FulfillmentLedger<ID, Q>>> release(ID fulfillmentId, String actorId, Q detail, String comment, Instant now) {
         Objects.requireNonNull(fulfillmentId);
         Objects.requireNonNull(actorId);
         Objects.requireNonNull(comment);
         Objects.requireNonNull(now);
 
-        FulfillableRequest request = fulfillments.get(fulfillmentId);
+        FulfillableRequest<ID, Q> request = fulfillments.get(fulfillmentId);
         if (request == null) {
             return IO.of(Either.left("Fulfillment domain object not registered: " + fulfillmentId));
         }
@@ -247,25 +247,25 @@ public final class FulfillmentProcess {
             .bind(startTime -> repository.find(fulfillmentId))
             .bind((startTime, optLedger) -> {
                 if (optLedger.isEmpty()) {
-                    return IO.of(Either.<String, FulfillmentLedger>left("Fulfillment ledger not found: " + fulfillmentId));
+                    return IO.of(Either.<String, FulfillmentLedger<ID, Q>>left("Fulfillment ledger not found: " + fulfillmentId));
                 }
 
-                FulfillmentLedger ledger = optLedger.get();
+                FulfillmentLedger<ID, Q> ledger = optLedger.get();
 
                 // Delegate execution directly to rich aggregate!
-                Either<String, FulfillmentEvent> eitherEvent = ledger.release(actorId, quantity, comment, request, now);
+                Either<String, FulfillmentEvent<ID, Q>> eitherEvent = ledger.release(actorId, detail, comment, request, now);
                 if (eitherEvent.isLeft()) {
-                    return IO.of(Either.<String, FulfillmentLedger>left(eitherEvent.getLeft()));
+                    return IO.of(Either.<String, FulfillmentLedger<ID, Q>>left(eitherEvent.getLeft()));
                 }
 
-                FulfillmentEvent event = eitherEvent.getRight();
+                FulfillmentEvent<ID, Q> event = eitherEvent.getRight();
                 IO<Void> publishIO = event != null ? publisher.publish(event) : IO.of(null);
 
                 return repository.save(fulfillmentId, ledger)
                     .flatMap(v -> publishIO)
-                    .flatMap(v -> telemetry.recordSuccess("fulfillable", fulfillmentId + ":release"))
-                    .flatMap(v -> telemetry.recordDuration("fulfillable", fulfillmentId, System.currentTimeMillis() - startTime))
-                    .map(v -> Either.<String, FulfillmentLedger>right(ledger));
+                    .flatMap(v -> telemetry.recordSuccess("fulfillable", fulfillmentId.toString() + ":release"))
+                    .flatMap(v -> telemetry.recordDuration("fulfillable", fulfillmentId.toString(), System.currentTimeMillis() - startTime))
+                    .map(v -> Either.<String, FulfillmentLedger<ID, Q>>right(ledger));
             })
             .yield((startTime, optLedger, result) -> result);
     }

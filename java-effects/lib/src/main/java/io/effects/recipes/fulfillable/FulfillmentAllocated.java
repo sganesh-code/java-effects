@@ -6,21 +6,21 @@ import java.util.Objects;
 /**
  * Event published when items are successfully allocated.
  */
-public final class FulfillmentAllocated implements FulfillmentEvent {
-    private final String fulfillmentId;
-    private final int quantity;
+public final class FulfillmentAllocated<ID, Q> implements FulfillmentEvent<ID, Q> {
+    private final ID fulfillmentId;
+    private final Q detail;
     private final Instant occurredAt;
 
-    public FulfillmentAllocated(String fulfillmentId, int quantity, Instant occurredAt) {
+    public FulfillmentAllocated(ID fulfillmentId, Q detail, Instant occurredAt) {
         this.fulfillmentId = Objects.requireNonNull(fulfillmentId);
-        this.quantity = quantity;
+        this.detail = Objects.requireNonNull(detail);
         this.occurredAt = Objects.requireNonNull(occurredAt);
     }
 
     @Override
-    public String fulfillmentId() { return fulfillmentId; }
+    public ID fulfillmentId() { return fulfillmentId; }
 
-    public int quantity() { return quantity; }
+    public Q detail() { return detail; }
 
     @Override
     public Instant occurredAt() { return occurredAt; }

@@ -45,7 +45,7 @@ The following tickets break down the comprehensive refactoring of the `java-effe
       - Configure internal ports to use generic `StateRepository<ID, PaymentLedger<ID, M>>` and `EventPublisher<PaymentEvent<ID, M>>`.
       - Update public monadic methods (`authorize`, `capture`, `reverse`, `refund`) to accept generic `M` and route calls to the ledger and request.
 
-- [ ] **🎟️ [TICKET-002]: Generalize `Fulfillable` Recipe to Support Custom Item/Quantity Models**
+- [x] **🎟️ [TICKET-002]: Generalize `Fulfillable` Recipe to Support Custom Item/Quantity Models**
   - **Description:** 
     Refactor the `Fulfillable` recipe to remove primitive `int quantity` assumptions. We will parameterize the entire package with generic types `<ID, Q>`, where `ID` is the fulfillment identifier type and `Q` is the consumer-defined item/quantity detail model (e.g., a multi-item line mapping, complex weight measurements, or serial-number allocations).
   - **Scope:**
@@ -55,21 +55,26 @@ The following tickets break down the comprehensive refactoring of the `java-effe
     - **Out of scope:**
       - Non-fulfillment workflows.
   - **Implementation Tasks:**
-    - [ ] Update `@java-effects/lib/src/main/java/io/effects/recipes/fulfillable/FulfillmentStep.java` to:
+    - [x] Update `@java-effects/lib/src/main/java/io/effects/recipes/fulfillable/FulfillmentStep.java` to:
+      - *Refactored `FulfillmentStep` to use a generic type `<Q>` and replaced `int quantity` with `Q detail`.*
       - Add type parameter `<Q>`.
       - Replace `int quantity` with `Q detail`.
-    - [ ] Update `@java-effects/lib/src/main/java/io/effects/recipes/fulfillable/FulfillmentEvent.java` and its sub-classes (`FulfillmentAllocated`, `FulfillmentDispatched`, `FulfillmentCompleted`, `FulfillmentReleased`):
+    - [x] Update `@java-effects/lib/src/main/java/io/effects/recipes/fulfillable/FulfillmentEvent.java` and its sub-classes (`FulfillmentAllocated`, `FulfillmentDispatched`, `FulfillmentCompleted`, `FulfillmentReleased`):
+      - *Refactored `FulfillmentEvent` and all implementing event classes (`FulfillmentAllocated`, `FulfillmentDispatched`, `FulfillmentCompleted`, `FulfillmentReleased`) to use the generic types `<ID, Q>`, removing hardcoded primitive types.*
       - Add type parameters `<ID, Q>`.
       - Store generic `ID fulfillmentId` and `Q detail` instead of primitive types.
-    - [ ] Update `@java-effects/lib/src/main/java/io/effects/recipes/fulfillable/FulfillableRequest.java` to:
+    - [x] Update `@java-effects/lib/src/main/java/io/effects/recipes/fulfillable/FulfillableRequest.java` to:
+      - *Refactored `FulfillableRequest` interface to add generic types `<ID, Q>` and updated all evaluate methods to use generic `Q detail` and ledger context.*
       - Add type parameters `<ID, Q>`.
       - Refactor signatures to use generic `Q detail` instead of `int quantity`, passing `FulfillmentLedger<ID, Q>` to validation methods.
-    - [ ] Update `@java-effects/lib/src/main/java/io/effects/recipes/fulfillable/FulfillmentLedger.java` to:
+    - [x] Update `@java-effects/lib/src/main/java/io/effects/recipes/fulfillable/FulfillmentLedger.java` to:
+      - *Refactored `FulfillmentLedger` to use `<ID, Q>`, removing all primitive properties and delegating balance calculations to `FulfillableRequest` via double-dispatch.*
       - Add type parameters `<ID, Q>`.
       - Remove `totalQuantity`, `allocatedQuantity`, and `packagedQuantity` primitive properties.
       - Track only `ID fulfillmentId`, `Status status`, and `List<FulfillmentStep<Q>> history`.
       - Provide getter methods for history, delegating all quantity verification to the `FulfillableRequest` via double-dispatch.
-    - [ ] Update `@java-effects/lib/src/main/java/io/effects/recipes/fulfillable/FulfillmentProcess.java` to:
+    - [x] Update `@java-effects/lib/src/main/java/io/effects/recipes/fulfillable/FulfillmentProcess.java` to:
+      - *Refactored `FulfillmentProcess` to be parameterized by `<ID, Q>`, propagates generic `Q` item details, and updates methods to operate on the generic `FulfillmentLedger`.*
       - Add type parameters `<ID, Q>`.
       - Update signatures of `allocate`, `package`, `dispatch`, `complete`, and `release` to use `Q` details and propagate calls to the updated repository and ledger.
 

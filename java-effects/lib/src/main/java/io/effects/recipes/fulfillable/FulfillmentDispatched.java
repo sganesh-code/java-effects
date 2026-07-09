@@ -6,17 +6,17 @@ import java.util.Objects;
 /**
  * Event published when the fulfillment order is dispatched/shipped.
  */
-public final class FulfillmentDispatched implements FulfillmentEvent {
-    private final String fulfillmentId;
+public final class FulfillmentDispatched<ID, Q> implements FulfillmentEvent<ID, Q> {
+    private final ID fulfillmentId;
     private final Instant occurredAt;
 
-    public FulfillmentDispatched(String fulfillmentId, Instant occurredAt) {
+    public FulfillmentDispatched(ID fulfillmentId, Instant occurredAt) {
         this.fulfillmentId = Objects.requireNonNull(fulfillmentId);
         this.occurredAt = Objects.requireNonNull(occurredAt);
     }
 
     @Override
-    public String fulfillmentId() { return fulfillmentId; }
+    public ID fulfillmentId() { return fulfillmentId; }
 
     @Override
     public Instant occurredAt() { return occurredAt; }
