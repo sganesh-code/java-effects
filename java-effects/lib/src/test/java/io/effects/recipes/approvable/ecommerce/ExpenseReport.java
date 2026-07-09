@@ -10,10 +10,7 @@ import java.util.Objects;
  * Grounded in Alan Kay's OOP vision, it exposes no identity or initiator getters to the system,
  * relying entirely on behavior evaluation messages.
  */
-public final class ExpenseReport implements ApprovableRequest {
-    private final double amount;
-    private final String purpose;
-
+public record ExpenseReport(double amount, String purpose) implements ApprovableRequest {
     public ExpenseReport(double amount, String purpose) {
         if (amount < 0) {
             throw new IllegalArgumentException("Amount cannot be negative");
@@ -21,10 +18,6 @@ public final class ExpenseReport implements ApprovableRequest {
         this.amount = amount;
         this.purpose = Objects.requireNonNull(purpose);
     }
-
-    public double amount() { return amount; }
-
-    public String purpose() { return purpose; }
 
     @Override
     public InitialAssessment evaluateInitialSubmission(Instant now) {
@@ -39,12 +32,12 @@ public final class ExpenseReport implements ApprovableRequest {
 
     @Override
     public Either<String, NextStep> evaluateDecision(
-        ApprovalRecord record, 
-        String approverId, 
-        String approverRole, 
-        DecisionType decisionType, 
-        String comment, 
-        Instant now
+            ApprovalRecord record,
+            String approverId,
+            String approverRole,
+            DecisionType decisionType,
+            String comment,
+            Instant now
     ) {
         if (record.isTerminal()) {
             return Either.left("Request has already reached a terminal state");

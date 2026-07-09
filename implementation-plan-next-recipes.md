@@ -122,7 +122,7 @@ All of these recipes will strictly leverage our root-level, generalized ports an
 
 ---
 
-- [ ] **🎟️ [RECIPE-006]: Implement the Schedulable Object Collaboration Recipe**
+- [x] **🎟️ [RECIPE-006]: Implement the Schedulable Object Collaboration Recipe**
   - **Description:** 
     Implement the `Schedulable` object collaboration recipe, representing a reusable, domain-agnostic protocol for scheduling, adjusting, executing, and cancelling timed occurrences (SLA deadlines, reminder alerts, or recurring runs).
     
@@ -146,9 +146,16 @@ All of these recipes will strictly leverage our root-level, generalized ports an
       - Direct OS-level cron thread pools or persistent system timers.
 
   - **Implementation Tasks:**
-    - [ ] **Design Contracts:** Define `ScheduleStep`, `ScheduleLedger`, and the `SchedulableRequest` interface under `@java-effects/lib/src/main/java/io/effects/recipes/schedulable`.
-    - [ ] **Implement Process Engine:** Create `SchedulableProcess.java` with monadic pipelines for `schedule`, `reschedule`, `cancel`, and `fire`.
-    - [ ] **Unit Tests:** Create `SchedulableRecipeTest.java` in `src/test/java` testing rescheduling capabilities, clock trigger checks, and cancellation invariants.
+    - [x] **Design Contracts:**
+      - *Created SchedulableRequest pure behavioral interface, ScheduleLedger thread-safe state container, and ScheduleStep immutable step.*
+      - *Created SchedulableEvent base interface and OccurrenceScheduled, OccurrenceRescheduled, OccurrenceFired, and OccurrenceCancelled concrete events.*
+      - Define `ScheduleStep`, `ScheduleLedger`, and the `SchedulableRequest` interface under `@java-effects/lib/src/main/java/io/effects/recipes/schedulable`.
+    - [x] **Implement Process Engine:**
+      - *Created SchedulableProcess.java coordinating repository actions, generic events publication, and operational telemetry recording inside lazy IO monads.*
+      - Create `SchedulableProcess.java` with monadic pipelines for `schedule`, `reschedule`, `cancel`, and `fire`.
+    - [x] **Unit Tests:**
+      - *Created SchedulableRecipeTest.java under java-effects test folder. Implemented robust scenario testing for initial scheduling future-trigger bounds, in-flight trigger time reschedules, temporal progress execution checks, and immutable cancelled terminal state blocks.*
+      - Create `SchedulableRecipeTest.java` in `src/test/java` testing rescheduling capabilities, clock trigger checks, and cancellation invariants.
 
 ---
 
