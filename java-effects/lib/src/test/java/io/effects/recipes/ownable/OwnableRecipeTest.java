@@ -1,6 +1,7 @@
 package io.effects.recipes.ownable;
 
 import io.effects.Either;
+import io.effects.ForIO;
 import io.effects.IO;
 import io.effects.ports.EventPublisher;
 import io.effects.ports.StateRepository;
@@ -19,12 +20,7 @@ class OwnableRecipeTest {
 
     // A concrete, behavioral domain asset representing a digital property (e.g. source code repo or license)
     // Exposes NO getter APIs for identity or initiators, satisfying our pure OOP guidelines.
-    private static final class DigitalAsset implements OwnableRequest {
-        private final boolean restrictionEnabled;
-
-        DigitalAsset(boolean restrictionEnabled) {
-            this.restrictionEnabled = restrictionEnabled;
-        }
+    private record DigitalAsset(boolean restrictionEnabled) implements OwnableRequest {
 
         @Override
         public Either<String, Void> evaluateInitialAssignment(String ownerId, Instant now) {
@@ -39,11 +35,11 @@ class OwnableRecipeTest {
 
         @Override
         public Either<String, Void> evaluateTransfer(
-            OwnershipRecord record, 
-            String currentOwnerId, 
-            String proposedOwnerId, 
-            String actorId, 
-            Instant now
+                OwnershipRecord record,
+                String currentOwnerId,
+                String proposedOwnerId,
+                String actorId,
+                Instant now
         ) {
             // Under revocation, proposedOwnerId is null
             if (proposedOwnerId == null) {
@@ -73,36 +69,33 @@ class OwnableRecipeTest {
     void testInitialOwnershipAssignment() {
         OwnableProcess process = new OwnableProcess();
         DigitalAsset repo = new DigitalAsset(true);
-        process.register("repo-1", repo).unsafeRunSync();
+        ForIO.set(process.register("repo-1", repo))
+                .bind(ignored -> IO.of(Instant.parse("2026-07-08T10:00:00Z")))
+                .bind((ignored, t0) ->
+                        process.assignOwner("repo-1", "", t0))
+                .bind((ignored, t0, badResult) ->
+                        process.assignOwner("repo-1", "restricted-user", t0))
+                .bind((ignored, t0, badResult, restrictedResult) ->
+                        process.assignOwner("repo-1", "alice", t0))
+                .yield((ignored, t0, badResult, restrictedResult, successResult) -> {
+                    assertTrue(successResult.isRight());
+                    OwnershipRecord ownershipRecord = successResult.getRight();
 
-        Instant t0 = Instant.parse("2026-07-08T10:00:00Z");
+                    assertEquals("alice", ownershipRecord.currentOwnerId());
+                    assertTrue(ownershipRecord.hasOwner());
 
-        // Fails because owner is empty
-        Either<String, OwnershipRecord> badResult = process.assignOwner("repo-1", "", t0).unsafeRunSync();
-        assertTrue(badResult.isLeft());
+                    // Chronology contains exactly the assignment step
+                    List<OwnershipStep> history = ownershipRecord.history();
+                    assertEquals(1, history.size());
+                    assertEquals("alice", history.get(0).actorId());
+                    assertEquals(OwnershipStep.Type.ASSIGN, history.get(0).type());
 
-        // Fails because owner is restricted
-        Either<String, OwnershipRecord> restrictedResult = process.assignOwner("repo-1", "restricted-user", t0).unsafeRunSync();
-        assertTrue(restrictedResult.isLeft());
-
-        // Succeeds
-        Either<String, OwnershipRecord> successResult = process.assignOwner("repo-1", "alice", t0).unsafeRunSync();
-        assertTrue(successResult.isRight());
-        OwnershipRecord record = successResult.getRight();
-
-        assertEquals("alice", record.currentOwnerId());
-        assertTrue(record.hasOwner());
-
-        // Chronology contains exactly the assignment step
-        List<OwnershipStep> history = record.history();
-        assertEquals(1, history.size());
-        assertEquals("alice", history.get(0).actorId());
-        assertEquals(OwnershipStep.Type.ASSIGN, history.get(0).type());
-
-        // Double assign fails
-        Either<String, OwnershipRecord> reAssign = process.assignOwner("repo-1", "bob", t0.plusSeconds(10)).unsafeRunSync();
-        assertTrue(reAssign.isLeft());
-        assertTrue(reAssign.getLeft().contains("Asset already has an active owner"));
+                    // Double assign fails
+                    Either<String, OwnershipRecord> reAssign = process.assignOwner("repo-1", "bob", t0.plusSeconds(10)).unsafeRunSync();
+                    assertTrue(reAssign.isLeft());
+                    assertTrue(reAssign.getLeft().contains("Asset already has an active owner"));
+                    return null;
+                });
     }
 
     // 2. Ownership Transfer & Actor Validation Invariant
@@ -122,14 +115,14 @@ class OwnableRecipeTest {
 
         // Bob tries to transfer it -> Fails (only current owner can transfer)
         Either<String, OwnershipRecord> badTransfer = process.transferOwner(
-            "doc-1", "alice", "charlie", "bob", "Stealing document", t0.plusSeconds(10)
+                "doc-1", "alice", "charlie", "bob", "Stealing document", t0.plusSeconds(10)
         ).unsafeRunSync();
         assertTrue(badTransfer.isLeft());
         assertTrue(badTransfer.getLeft().contains("Only the current owner can initiate a transfer"));
 
         // Alice transfers to Bob -> Succeeds
         Either<String, OwnershipRecord> goodTransfer = process.transferOwner(
-            "doc-1", "alice", "bob", "alice", "Gift to Bob", t0.plusSeconds(20)
+                "doc-1", "alice", "bob", "alice", "Gift to Bob", t0.plusSeconds(20)
         ).unsafeRunSync();
         assertTrue(goodTransfer.isRight());
         OwnershipRecord record = goodTransfer.getRight();
@@ -149,7 +142,7 @@ class OwnableRecipeTest {
         assertEquals(2, events.size());
         assertTrue(events.get(0) instanceof OwnershipAssigned);
         assertTrue(events.get(1) instanceof OwnershipTransferred);
-        
+
         OwnershipTransferred transferEvent = (OwnershipTransferred) events.get(1);
         assertEquals("doc-1", transferEvent.assetId());
         assertEquals("alice", transferEvent.previousOwnerId());
@@ -172,13 +165,13 @@ class OwnableRecipeTest {
 
         // Bob attempts to revoke -> Fails (insufficient privileges)
         Either<String, OwnershipRecord> badRevoke = process.revokeOwner(
-            "patent-1", "alice", "bob", "General complaint", t0.plusSeconds(10)
+                "patent-1", "alice", "bob", "General complaint", t0.plusSeconds(10)
         ).unsafeRunSync();
         assertTrue(badRevoke.isLeft());
 
         // System Admin revokes -> Succeeds
         Either<String, OwnershipRecord> goodRevoke = process.revokeOwner(
-            "patent-1", "alice", "SYSTEM_ADMIN", "Patent expired", t0.plusSeconds(20)
+                "patent-1", "alice", "SYSTEM_ADMIN", "Patent expired", t0.plusSeconds(20)
         ).unsafeRunSync();
         assertTrue(goodRevoke.isRight());
         OwnershipRecord record = goodRevoke.getRight();
@@ -196,14 +189,14 @@ class OwnableRecipeTest {
         List<OwnershipEvent> events = publisher.getPublishedEvents();
         assertEquals(2, events.size());
         assertTrue(events.get(1) instanceof OwnershipRevoked);
-        
+
         OwnershipRevoked revokeEvent = (OwnershipRevoked) events.get(1);
         assertEquals("patent-1", revokeEvent.assetId());
         assertEquals("alice", revokeEvent.previousOwnerId());
 
         // Trying to transfer a revoked/ownerless asset is prohibited
         Either<String, OwnershipRecord> badTransfer = process.transferOwner(
-            "patent-1", "alice", "bob", "alice", "Try transfer revoked", t0.plusSeconds(30)
+                "patent-1", "alice", "bob", "alice", "Try transfer revoked", t0.plusSeconds(30)
         ).unsafeRunSync();
         assertTrue(badTransfer.isLeft());
         assertTrue(badTransfer.getLeft().contains("Cannot transfer: asset has no active owner"));
@@ -218,7 +211,10 @@ class OwnableRecipeTest {
 
             @Override
             public IO<Void> recordSuccess(String context, String operationId) {
-                return IO.delay(() -> { successes++; return null; });
+                return IO.delay(() -> {
+                    successes++;
+                    return null;
+                });
             }
 
             @Override
@@ -228,15 +224,18 @@ class OwnableRecipeTest {
 
             @Override
             public IO<Void> recordDuration(String context, String operationId, long durationMs) {
-                return IO.delay(() -> { durations++; return null; });
+                return IO.delay(() -> {
+                    durations++;
+                    return null;
+                });
             }
         }
 
         TelemetrySpy spy = new TelemetrySpy();
         OwnableProcess process = new OwnableProcess(
-            new InMemoryStateRepository<>(),
-            new InMemoryEventPublisher<>(),
-            spy
+                new InMemoryStateRepository<>(),
+                new InMemoryEventPublisher<>(),
+                spy
         );
 
         DigitalAsset token = new DigitalAsset(false);

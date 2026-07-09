@@ -48,7 +48,7 @@ All of these recipes will strictly leverage our root-level, generalized ports an
 
 ---
 
-- [ ] **🎟️ [RECIPE-004]: Implement the Payable Object Collaboration Recipe**
+- [x] **🎟️ [RECIPE-004]: Implement the Payable Object Collaboration Recipe**
   - **Description:** 
     Implement the `Payable` (Settleable) object collaboration recipe, representing a reusable protocol for payment flows (authorizations, captures, reversals, and refunds).
     
@@ -72,9 +72,16 @@ All of these recipes will strictly leverage our root-level, generalized ports an
       - Direct PCI-compliant card handling or third-party bank connections.
 
   - **Implementation Tasks:**
-    - [ ] **Design Contracts:** Define enums, `PaymentStep`, `PaymentLedger`, and the `PayableRequest` interface under `@java-effects/lib/src/main/java/io/effects/recipes/payable`.
-    - [ ] **Implement Process Engine:** Create `PayableProcess.java` implementing the monadic pipelines for `authorize`, `capture`, `reverse`, and `refund` methods using `ForIO`.
-    - [ ] **Unit Tests:** Create `PayableRecipeTest.java` in `src/test/java` to test authorization caps, multi-capture idempotency, and refund limits.
+    - [x] **Design Contracts:**
+      - *Created PayableRequest pure behavioral, getter-free interface, PaymentLedger non-anemic domain state ledger, and PaymentStep immutable audit step record.*
+      - *Created PaymentEvent base interface and PaymentAuthorized, PaymentCaptured, PaymentReversed, and PaymentRefunded concrete event implementations.*
+      - Define enums, `PaymentStep`, `PaymentLedger`, and the `PayableRequest` interface under `@java-effects/lib/src/main/java/io/effects/recipes/payable`.
+    - [x] **Implement Process Engine:**
+      - *Created PayableProcess.java coordinating repository actions, generic events publication, and operational telemetry recording inside lazy IO monads.*
+      - Create `PayableProcess.java` implementing the monadic pipelines for `authorize`, `capture`, `reverse`, and `refund` methods using `ForIO`.
+    - [x] **Unit Tests:**
+      - *Created PayableRecipeTest.java under java-effects test folder. Implemented robust scenario testing for initial authorization bounds, multi-step captures, authorization reversals, and refund cap constraints.*
+      - Create `PayableRecipeTest.java` in `src/test/java` to test authorization caps, multi-capture idempotency, and refund limits.
 
 ---
 
