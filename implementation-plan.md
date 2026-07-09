@@ -101,7 +101,7 @@ All of these recipes will strictly leverage our root-level, generalized ports an
       - Define a custom `Clearance` grant record and `AccessContext` record.
       - Implement tests asserting grant bounds, temporal grant expirations, dynamic revocations, and access check explanations.
 
-- [ ] **🎟️ [TICKET-003]: Implement the `Meterable` Object Collaboration Recipe**
+- [x] **🎟️ [TICKET-003]: Implement the `Meterable` Object Collaboration Recipe**
   - **Description:** 
     Implement the `Meterable` recipe, representing a reusable protocol for consumption usage tracking, dynamic tier plan rating, and invoicing.
     
@@ -123,21 +123,26 @@ All of these recipes will strictly leverage our root-level, generalized ports an
       - Connecting directly to payment gateways (Stripe, Adyen) or PDF invoice generation.
 
   - **Implementation Tasks:**
-    - [ ] Create `@java-effects/lib/src/main/java/io/effects/recipes/meterable/UsageStep.java` containing:
+    - [x] Create `@java-effects/lib/src/main/java/io/effects/recipes/meterable/UsageStep.java` containing:
+      - *Created UsageStep record parameterized by `<U>` representing discrete consumption metric ticks.*
       - Add type parameter `<U>`.
       - Store `U metric` tick details.
-    - [ ] Create `@java-effects/lib/src/main/java/io/effects/recipes/meterable/MeterableRequest.java` containing:
+    - [x] Create `@java-effects/lib/src/main/java/io/effects/recipes/meterable/MeterableRequest.java` containing:
+      - *Created MeterableRequest pure behavioral interface with generic parameters `<ID, U, R>`, declaring synchronous evaluateUsage and evaluateRating methods.*
       - Add type parameters `<ID, U, R>`.
       - Define behavioral messages:
         - `Either<String, Void> evaluateUsage(MeterLedger<ID, U> ledger, U metric, Instant now);`
         - `Either<String, R> evaluateRating(MeterLedger<ID, U> ledger, Instant now);`
-    - [ ] Create `@java-effects/lib/src/main/java/io/effects/recipes/meterable/MeterLedger.java` containing:
+    - [x] Create `@java-effects/lib/src/main/java/io/effects/recipes/meterable/MeterLedger.java` containing:
+      - *Created MeterLedger aggregate root with generic parameters `<ID, U>`, managing in-memory billing cycles and status finalizations.*
       - Add type parameters `<ID, U>`.
       - Maintain `ID accountId`, `Status status`, and `List<UsageStep<U>> history`.
       - Implement thread-safe transitions and billing cycle locks.
-    - [ ] Create `@java-effects/lib/src/main/java/io/effects/recipes/meterable/MeterableProcess.java` containing:
+    - [x] Create `@java-effects/lib/src/main/java/io/effects/recipes/meterable/MeterableProcess.java` containing:
+      - *Created MeterableProcess and MeterableEvent supporting generic usage billing starts, recording usage ticks, and rating cycle finalizations.*
       - Monadic pipelines executing in `IO` for `start()`, `recordUsage()`, and `rate()`.
-    - [ ] Create `@java-effects/lib/src/test/java/io/effects/recipes/meterable/MeterableRecipeTest.java` containing:
+    - [x] Create `@java-effects/lib/src/test/java/io/effects/recipes/meterable/MeterableRecipeTest.java` containing:
+      - *Created MeterableRecipeTest defining custom ApiUsage and BillInvoice records, and verifying continuous ticks, SaaS tier pricing, and post-billing finality.*
       - Define a custom `ApiUsage` metric tick record and `BillInvoice` rated record.
       - Implement tests verifying continuous usage ticks, dynamic tier calculation (SaaS rates), cycle transitions, and post-billing finality locks.
 
