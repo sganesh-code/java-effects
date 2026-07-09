@@ -5,8 +5,8 @@ import java.util.Objects;
 /**
  * Result of evaluating an initial submission.
  */
-public record InitialAssessment(Status initialStatus, String requiredAuthority) {
-    public InitialAssessment(Status initialStatus, String requiredAuthority) {
+public record InitialAssessment<A>(Status initialStatus, A requiredAuthority) {
+    public InitialAssessment(Status initialStatus, A requiredAuthority) {
         this.initialStatus = Objects.requireNonNull(initialStatus);
         this.requiredAuthority = requiredAuthority;
     }

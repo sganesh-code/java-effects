@@ -21,11 +21,11 @@ import java.util.concurrent.ConcurrentMap;
  * It coordinates monadic persistence lookup, domain aggregation, and event publishing,
  * completely decoupled from business logic invariants (which reside inside ApprovalRecord).
  */
-public final class ApprovalProcess {
-    private final StateRepository<String, ApprovalRecord> repository;
-    private final EventPublisher<ApprovalEvent> publisher;
+public final class ApprovalProcess<ID, A, C> {
+    private final StateRepository<ID, ApprovalRecord<ID, A, C>> repository;
+    private final EventPublisher<ApprovalEvent<ID, A>> publisher;
     private final TelemetryPort telemetry;
-    private final ConcurrentMap<String, ApprovableRequest> requests = new ConcurrentHashMap<>();
+    private final ConcurrentMap<ID, ApprovableRequest<ID, A, C>> requests = new ConcurrentHashMap<>();
 
     /**
      * Default constructor uses the in-memory adapters for robust backward compatibility.
@@ -38,8 +38,8 @@ public final class ApprovalProcess {
      * Dependency injection constructor to configure custom ports/adapters at runtime.
      */
     public ApprovalProcess(
-        StateRepository<String, ApprovalRecord> repository,
-        EventPublisher<ApprovalEvent> publisher,
+        StateRepository<ID, ApprovalRecord<ID, A, C>> repository,
+        EventPublisher<ApprovalEvent<ID, A>> publisher,
         TelemetryPort telemetry
     ) {
         this.repository = Objects.requireNonNull(repository);
@@ -50,7 +50,7 @@ public final class ApprovalProcess {
     /**
      * Registers a behavioral ownable request domain object.
      */
-    public IO<Void> register(String requestId, ApprovableRequest request) {
+    public IO<Void> register(ID requestId, ApprovableRequest<ID, A, C> request) {
         Objects.requireNonNull(requestId);
         Objects.requireNonNull(request);
         return IO.delay(() -> {
@@ -62,12 +62,13 @@ public final class ApprovalProcess {
     /**
      * Evaluates initial submission and saves/publishes.
      */
-    public IO<Either<String, ApprovalRecord>> submit(String requestId, String initiatorId, Instant now) {
+    public IO<Either<String, ApprovalRecord<ID, A, C>>> submit(ID requestId, String initiatorId, C submitComment, Instant now) {
         Objects.requireNonNull(requestId);
         Objects.requireNonNull(initiatorId);
+        Objects.requireNonNull(submitComment);
         Objects.requireNonNull(now);
 
-        ApprovableRequest request = requests.get(requestId);
+        ApprovableRequest<ID, A, C> request = requests.get(requestId);
         if (request == null) {
             return IO.of(Either.left("Request domain object not registered: " + requestId));
         }
@@ -76,27 +77,27 @@ public final class ApprovalProcess {
             .bind(startTime -> repository.find(requestId))
             .bind((startTime, optRecord) -> {
                 if (optRecord.isPresent()) {
-                    return IO.of(Either.<String, ApprovalRecord>left("Request already submitted: " + requestId));
+                    return IO.of(Either.<String, ApprovalRecord<ID, A, C>>left("Request already submitted: " + requestId));
                 }
 
                 // Delegate creation and transition to rich aggregate factory
-                Either<String, TransitionResult<ApprovalRecord, ApprovalEvent>> submitResult = ApprovalRecord.submit(
-                    requestId, initiatorId, request, now
+                Either<String, TransitionResult<ApprovalRecord<ID, A, C>, ApprovalEvent<ID, A>>> submitResult = ApprovalRecord.submit(
+                    requestId, initiatorId, submitComment, request, now
                 );
 
                 if (submitResult.isLeft()) {
-                    return IO.of(Either.<String, ApprovalRecord>left(submitResult.getLeft()));
+                    return IO.of(Either.<String, ApprovalRecord<ID, A, C>>left(submitResult.getLeft()));
                 }
 
-                TransitionResult<ApprovalRecord, ApprovalEvent> result = submitResult.getRight();
-                ApprovalRecord record = result.aggregate();
-                ApprovalEvent event = result.event();
+                TransitionResult<ApprovalRecord<ID, A, C>, ApprovalEvent<ID, A>> result = submitResult.getRight();
+                ApprovalRecord<ID, A, C> record = result.aggregate();
+                ApprovalEvent<ID, A> event = result.event();
 
                 return repository.save(record.requestId(), record)
                     .flatMap(v -> publisher.publish(event))
-                    .flatMap(v -> telemetry.recordSuccess("approvable", requestId + ":submit"))
-                    .flatMap(v -> telemetry.recordDuration("approvable", requestId, System.currentTimeMillis() - startTime))
-                    .map(v -> Either.<String, ApprovalRecord>right(record));
+                    .flatMap(v -> telemetry.recordSuccess("approvable", requestId.toString() + ":submit"))
+                    .flatMap(v -> telemetry.recordDuration("approvable", requestId.toString(), System.currentTimeMillis() - startTime))
+                    .map(v -> Either.<String, ApprovalRecord<ID, A, C>>right(record));
             })
             .yield((startTime, optRecord, result) -> result);
     }
@@ -104,14 +105,14 @@ public final class ApprovalProcess {
     /**
      * Executes validation and transitions to next approval stage.
      */
-    public IO<Either<String, ApprovalRecord>> approve(String requestId, String approverId, String approverRole, String comment, Instant now) {
+    public IO<Either<String, ApprovalRecord<ID, A, C>>> approve(ID requestId, String approverId, A approverRole, C detail, Instant now) {
         Objects.requireNonNull(requestId);
         Objects.requireNonNull(approverId);
         Objects.requireNonNull(approverRole);
-        Objects.requireNonNull(comment);
+        Objects.requireNonNull(detail);
         Objects.requireNonNull(now);
 
-        ApprovableRequest request = requests.get(requestId);
+        ApprovableRequest<ID, A, C> request = requests.get(requestId);
         if (request == null) {
             return IO.of(Either.left("Request domain object not registered: " + requestId));
         }
@@ -120,25 +121,25 @@ public final class ApprovalProcess {
             .bind(startTime -> repository.find(requestId))
             .bind((startTime, optRecord) -> {
                 if (optRecord.isEmpty()) {
-                    return IO.of(Either.<String, ApprovalRecord>left("Request record not found: " + requestId));
+                    return IO.of(Either.<String, ApprovalRecord<ID, A, C>>left("Request record not found: " + requestId));
                 }
 
-                ApprovalRecord record = optRecord.get();
+                ApprovalRecord<ID, A, C> record = optRecord.get();
 
                 // Delegate execution directly to rich aggregate!
-                Either<String, ApprovalEvent> eitherEvent = record.approve(approverId, approverRole, comment, request, now);
+                Either<String, ApprovalEvent<ID, A>> eitherEvent = record.approve(approverId, approverRole, detail, request, now);
                 if (eitherEvent.isLeft()) {
-                    return IO.of(Either.<String, ApprovalRecord>left(eitherEvent.getLeft()));
+                    return IO.of(Either.<String, ApprovalRecord<ID, A, C>>left(eitherEvent.getLeft()));
                 }
 
-                ApprovalEvent event = eitherEvent.getRight();
+                ApprovalEvent<ID, A> event = eitherEvent.getRight();
                 IO<Void> publishIO = event != null ? publisher.publish(event) : IO.of(null);
 
                 return repository.save(record.requestId(), record)
                     .flatMap(v -> publishIO)
-                    .flatMap(v -> telemetry.recordSuccess("approvable", requestId + ":approve"))
-                    .flatMap(v -> telemetry.recordDuration("approvable", requestId, System.currentTimeMillis() - startTime))
-                    .map(v -> Either.<String, ApprovalRecord>right(record));
+                    .flatMap(v -> telemetry.recordSuccess("approvable", requestId.toString() + ":approve"))
+                    .flatMap(v -> telemetry.recordDuration("approvable", requestId.toString(), System.currentTimeMillis() - startTime))
+                    .map(v -> Either.<String, ApprovalRecord<ID, A, C>>right(record));
             })
             .yield((startTime, optRecord, result) -> result);
     }
@@ -146,14 +147,14 @@ public final class ApprovalProcess {
     /**
      * Transitions request to terminal rejected state.
      */
-    public IO<Either<String, ApprovalRecord>> reject(String requestId, String approverId, String approverRole, String reason, Instant now) {
+    public IO<Either<String, ApprovalRecord<ID, A, C>>> reject(ID requestId, String approverId, A approverRole, C reason, Instant now) {
         Objects.requireNonNull(requestId);
         Objects.requireNonNull(approverId);
         Objects.requireNonNull(approverRole);
         Objects.requireNonNull(reason);
         Objects.requireNonNull(now);
 
-        ApprovableRequest request = requests.get(requestId);
+        ApprovableRequest<ID, A, C> request = requests.get(requestId);
         if (request == null) {
             return IO.of(Either.left("Request domain object not registered: " + requestId));
         }
@@ -162,25 +163,25 @@ public final class ApprovalProcess {
             .bind(startTime -> repository.find(requestId))
             .bind((startTime, optRecord) -> {
                 if (optRecord.isEmpty()) {
-                    return IO.of(Either.<String, ApprovalRecord>left("Request record not found: " + requestId));
+                    return IO.of(Either.<String, ApprovalRecord<ID, A, C>>left("Request record not found: " + requestId));
                 }
 
-                ApprovalRecord record = optRecord.get();
+                ApprovalRecord<ID, A, C> record = optRecord.get();
 
                 // Delegate execution directly to rich aggregate!
-                Either<String, ApprovalEvent> eitherEvent = record.reject(approverId, approverRole, reason, request, now);
+                Either<String, ApprovalEvent<ID, A>> eitherEvent = record.reject(approverId, approverRole, reason, request, now);
                 if (eitherEvent.isLeft()) {
-                    return IO.of(Either.<String, ApprovalRecord>left(eitherEvent.getLeft()));
+                    return IO.of(Either.<String, ApprovalRecord<ID, A, C>>left(eitherEvent.getLeft()));
                 }
 
-                ApprovalEvent event = eitherEvent.getRight();
+                ApprovalEvent<ID, A> event = eitherEvent.getRight();
                 IO<Void> publishIO = event != null ? publisher.publish(event) : IO.of(null);
 
                 return repository.save(record.requestId(), record)
                     .flatMap(v -> publishIO)
-                    .flatMap(v -> telemetry.recordFailure("approvable", requestId + ":reject", reason))
-                    .flatMap(v -> telemetry.recordDuration("approvable", requestId, System.currentTimeMillis() - startTime))
-                    .map(v -> Either.<String, ApprovalRecord>right(record));
+                    .flatMap(v -> telemetry.recordFailure("approvable", requestId.toString() + ":reject", reason.toString()))
+                    .flatMap(v -> telemetry.recordDuration("approvable", requestId.toString(), System.currentTimeMillis() - startTime))
+                    .map(v -> Either.<String, ApprovalRecord<ID, A, C>>right(record));
             })
             .yield((startTime, optRecord, result) -> result);
     }
@@ -188,7 +189,7 @@ public final class ApprovalProcess {
     /**
      * Transitions request to escalated state with a new required authority level.
      */
-    public IO<Either<String, ApprovalRecord>> escalate(String requestId, String approverId, String approverRole, String targetAuthority, String reason, Instant now) {
+    public IO<Either<String, ApprovalRecord<ID, A, C>>> escalate(ID requestId, String approverId, A approverRole, A targetAuthority, C reason, Instant now) {
         Objects.requireNonNull(requestId);
         Objects.requireNonNull(approverId);
         Objects.requireNonNull(approverRole);
@@ -196,7 +197,7 @@ public final class ApprovalProcess {
         Objects.requireNonNull(reason);
         Objects.requireNonNull(now);
 
-        ApprovableRequest request = requests.get(requestId);
+        ApprovableRequest<ID, A, C> request = requests.get(requestId);
         if (request == null) {
             return IO.of(Either.left("Request domain object not registered: " + requestId));
         }
@@ -205,25 +206,25 @@ public final class ApprovalProcess {
             .bind(startTime -> repository.find(requestId))
             .bind((startTime, optRecord) -> {
                 if (optRecord.isEmpty()) {
-                    return IO.of(Either.<String, ApprovalRecord>left("Request record not found: " + requestId));
+                    return IO.of(Either.<String, ApprovalRecord<ID, A, C>>left("Request record not found: " + requestId));
                 }
 
-                ApprovalRecord record = optRecord.get();
+                ApprovalRecord<ID, A, C> record = optRecord.get();
 
                 // Delegate execution directly to rich aggregate!
-                Either<String, ApprovalEvent> eitherEvent = record.escalate(approverId, approverRole, targetAuthority, reason, request, now);
+                Either<String, ApprovalEvent<ID, A>> eitherEvent = record.escalate(approverId, approverRole, targetAuthority, reason, request, now);
                 if (eitherEvent.isLeft()) {
-                    return IO.of(Either.<String, ApprovalRecord>left(eitherEvent.getLeft()));
+                    return IO.of(Either.<String, ApprovalRecord<ID, A, C>>left(eitherEvent.getLeft()));
                 }
 
-                ApprovalEvent event = eitherEvent.getRight();
+                ApprovalEvent<ID, A> event = eitherEvent.getRight();
                 IO<Void> publishIO = event != null ? publisher.publish(event) : IO.of(null);
 
                 return repository.save(record.requestId(), record)
                     .flatMap(v -> publishIO)
-                    .flatMap(v -> telemetry.recordSuccess("approvable", requestId + ":escalate"))
-                    .flatMap(v -> telemetry.recordDuration("approvable", requestId, System.currentTimeMillis() - startTime))
-                    .map(v -> Either.<String, ApprovalRecord>right(record));
+                    .flatMap(v -> telemetry.recordSuccess("approvable", requestId.toString() + ":escalate"))
+                    .flatMap(v -> telemetry.recordDuration("approvable", requestId.toString(), System.currentTimeMillis() - startTime))
+                    .map(v -> Either.<String, ApprovalRecord<ID, A, C>>right(record));
             })
             .yield((startTime, optRecord, result) -> result);
     }

@@ -14,38 +14,38 @@ import java.util.UUID;
  * It encapsulates its own invariants, chronological history, state-process boundaries,
  * and produces Domain Events representing the outcomes of transitions.
  */
-public final class ApprovalRecord {
-    private final String requestId;
+public final class ApprovalRecord<ID, A, C> {
+    private final ID requestId;
     private final String initiatorId;
     private Status status;
-    private String requiredAuthority;
-    private final List<ApprovalDecision> history = new ArrayList<>();
+    private A requiredAuthority;
+    private final List<ApprovalDecision<A, C>> history = new ArrayList<>();
 
-    public ApprovalRecord(String requestId, String initiatorId, Status status, String requiredAuthority) {
+    public ApprovalRecord(ID requestId, String initiatorId, Status status, A requiredAuthority) {
         this.requestId = Objects.requireNonNull(requestId);
         this.initiatorId = Objects.requireNonNull(initiatorId);
         this.status = Objects.requireNonNull(status);
         this.requiredAuthority = requiredAuthority;
     }
 
-    public synchronized String requestId() { return requestId; }
+    public synchronized ID requestId() { return requestId; }
     public synchronized String initiatorId() { return initiatorId; }
     public synchronized Status status() { return status; }
-    public synchronized String requiredAuthority() { return requiredAuthority; }
-    public synchronized List<ApprovalDecision> history() { return Collections.unmodifiableList(new ArrayList<>(history)); }
+    public synchronized A requiredAuthority() { return requiredAuthority; }
+    public synchronized List<ApprovalDecision<A, C>> history() { return Collections.unmodifiableList(new ArrayList<>(history)); }
 
     public synchronized boolean isTerminal() {
         return status == Status.APPROVED || status == Status.REJECTED;
     }
 
-    public synchronized boolean hasDecisionByRole(String role, DecisionType type) {
-        return history.stream().anyMatch(d -> d.actorRole().equalsIgnoreCase(role) && d.type() == type);
+    public synchronized boolean hasDecisionByRole(A role, DecisionType type) {
+        return history.stream().anyMatch(d -> d.actorRole().equals(role) && d.type() == type);
     }
 
     /**
      * Records a decision and transitions the state of the record internally.
      */
-    private synchronized void recordDecision(ApprovalDecision decision, Status nextStatus, String nextRequiredAuthority) {
+    private synchronized void recordDecision(ApprovalDecision<A, C> decision, Status nextStatus, A nextRequiredAuthority) {
         Objects.requireNonNull(decision);
         Objects.requireNonNull(nextStatus);
 
@@ -61,35 +61,37 @@ public final class ApprovalRecord {
     /**
      * Behavioral Factory: Evaluates initial submission, builds the record, and produces the initial event.
      */
-    public static Either<String, TransitionResult<ApprovalRecord, ApprovalEvent>> submit(
-        String requestId, 
+    public static <ID, A, C> Either<String, TransitionResult<ApprovalRecord<ID, A, C>, ApprovalEvent<ID, A>>> submit(
+        ID requestId, 
         String initiatorId, 
-        ApprovableRequest request, 
+        C submitComment,
+        ApprovableRequest<ID, A, C> request, 
         Instant now
     ) {
         Objects.requireNonNull(requestId);
         Objects.requireNonNull(initiatorId);
+        Objects.requireNonNull(submitComment);
         Objects.requireNonNull(request);
         Objects.requireNonNull(now);
 
-        InitialAssessment assessment = request.evaluateInitialSubmission(now);
-        ApprovalRecord record = new ApprovalRecord(requestId, initiatorId, Status.PENDING, null);
+        InitialAssessment<A> assessment = request.evaluateInitialSubmission(now);
+        ApprovalRecord<ID, A, C> record = new ApprovalRecord<>(requestId, initiatorId, Status.PENDING, null);
 
-        ApprovalDecision submitDecision = new ApprovalDecision(
+        ApprovalDecision<A, C> submitDecision = new ApprovalDecision<>(
             UUID.randomUUID().toString(),
             initiatorId,
-            "INITIATOR",
+            null, // INITIATOR role
             DecisionType.APPROVE,
-            "Submitted for approval",
+            submitComment,
             now
         );
         record.recordDecision(submitDecision, assessment.initialStatus(), assessment.requiredAuthority());
 
-        ApprovalEvent event;
+        ApprovalEvent<ID, A> event;
         if (record.status() == Status.APPROVED) {
-            event = new RequestApproved(requestId, initiatorId, "AUTO_APPROVED", now);
+            event = new RequestApproved<>(requestId, initiatorId, "AUTO_APPROVED", now);
         } else {
-            event = new RequestSubmitted(requestId, initiatorId, record.requiredAuthority(), now);
+            event = new RequestSubmitted<>(requestId, initiatorId, record.requiredAuthority(), now);
         }
 
         return Either.right(new TransitionResult<>(record, event));
@@ -98,51 +100,51 @@ public final class ApprovalRecord {
     /**
      * Behavioral Transition: Evaluates approval against domain constraints and transitions state.
      */
-    public synchronized Either<String, ApprovalEvent> approve(
+    public synchronized Either<String, ApprovalEvent<ID, A>> approve(
         String approverId, 
-        String approverRole, 
-        String comment, 
-        ApprovableRequest request, 
+        A approverRole, 
+        C detail, 
+        ApprovableRequest<ID, A, C> request, 
         Instant now
     ) {
         Objects.requireNonNull(approverId);
         Objects.requireNonNull(approverRole);
-        Objects.requireNonNull(comment);
+        Objects.requireNonNull(detail);
         Objects.requireNonNull(request);
         Objects.requireNonNull(now);
 
         if (status == Status.APPROVED) {
-            return Either.right(null); // Idempotent success (no new event)
+            return Either.right(null); // Idempotent success
         }
         if (status == Status.REJECTED) {
             return Either.left("Cannot approve a rejected request: " + requestId);
         }
 
         // Delegate validation to pure behavioral object (double dispatch)
-        Either<String, NextStep> eitherNext = request.evaluateDecision(
-            this, approverId, approverRole, DecisionType.APPROVE, comment, now
+        Either<String, NextStep<A>> eitherNext = request.evaluateDecision(
+            this, approverId, approverRole, DecisionType.APPROVE, detail, now
         );
 
         if (eitherNext.isLeft()) {
             return Either.left(eitherNext.getLeft());
         }
 
-        NextStep next = eitherNext.getRight();
-        ApprovalDecision decision = new ApprovalDecision(
+        NextStep<A> next = eitherNext.getRight();
+        ApprovalDecision<A, C> decision = new ApprovalDecision<>(
             UUID.randomUUID().toString(),
             approverId,
             approverRole,
             DecisionType.APPROVE,
-            comment,
+            detail,
             now
         );
         recordDecision(decision, next.nextStatus(), next.nextRequiredAuthority());
 
-        ApprovalEvent event;
+        ApprovalEvent<ID, A> event;
         if (status == Status.APPROVED) {
-            event = new RequestApproved(requestId, approverId, comment, now);
+            event = new RequestApproved<>(requestId, approverId, detail.toString(), now);
         } else {
-            event = new RequestSubmitted(requestId, initiatorId, requiredAuthority, now);
+            event = new RequestSubmitted<>(requestId, initiatorId, requiredAuthority, now);
         }
 
         return Either.right(event);
@@ -151,11 +153,11 @@ public final class ApprovalRecord {
     /**
      * Behavioral Transition: Evaluates rejection against domain constraints and transitions state.
      */
-    public synchronized Either<String, ApprovalEvent> reject(
+    public synchronized Either<String, ApprovalEvent<ID, A>> reject(
         String approverId, 
-        String approverRole, 
-        String reason, 
-        ApprovableRequest request, 
+        A approverRole, 
+        C reason, 
+        ApprovableRequest<ID, A, C> request, 
         Instant now
     ) {
         Objects.requireNonNull(approverId);
@@ -172,7 +174,7 @@ public final class ApprovalRecord {
         }
 
         // Delegate validation to pure behavioral object
-        Either<String, NextStep> eitherNext = request.evaluateDecision(
+        Either<String, NextStep<A>> eitherNext = request.evaluateDecision(
             this, approverId, approverRole, DecisionType.REJECT, reason, now
         );
 
@@ -180,7 +182,7 @@ public final class ApprovalRecord {
             return Either.left(eitherNext.getLeft());
         }
 
-        ApprovalDecision decision = new ApprovalDecision(
+        ApprovalDecision<A, C> decision = new ApprovalDecision<>(
             UUID.randomUUID().toString(),
             approverId,
             approverRole,
@@ -190,19 +192,19 @@ public final class ApprovalRecord {
         );
         recordDecision(decision, Status.REJECTED, null);
 
-        ApprovalEvent event = new RequestRejected(requestId, approverId, reason, now);
+        ApprovalEvent<ID, A> event = new RequestRejected<>(requestId, approverId, reason.toString(), now);
         return Either.right(event);
     }
 
     /**
      * Behavioral Transition: Evaluates escalation against domain constraints and transitions state.
      */
-    public synchronized Either<String, ApprovalEvent> escalate(
+    public synchronized Either<String, ApprovalEvent<ID, A>> escalate(
         String approverId, 
-        String approverRole, 
-        String targetAuthority, 
-        String reason, 
-        ApprovableRequest request, 
+        A approverRole, 
+        A targetAuthority, 
+        C reason, 
+        ApprovableRequest<ID, A, C> request, 
         Instant now
     ) {
         Objects.requireNonNull(approverId);
@@ -217,7 +219,7 @@ public final class ApprovalRecord {
         }
 
         // Delegate validation to pure behavioral object
-        Either<String, NextStep> eitherNext = request.evaluateDecision(
+        Either<String, NextStep<A>> eitherNext = request.evaluateDecision(
             this, approverId, approverRole, DecisionType.ESCALATE, reason, now
         );
 
@@ -225,7 +227,7 @@ public final class ApprovalRecord {
             return Either.left(eitherNext.getLeft());
         }
 
-        ApprovalDecision decision = new ApprovalDecision(
+        ApprovalDecision<A, C> decision = new ApprovalDecision<>(
             UUID.randomUUID().toString(),
             approverId,
             approverRole,
@@ -235,7 +237,7 @@ public final class ApprovalRecord {
         );
         recordDecision(decision, Status.ESCALATED, targetAuthority);
 
-        ApprovalEvent event = new RequestEscalated(requestId, approverId, targetAuthority, reason, now);
+        ApprovalEvent<ID, A> event = new RequestEscalated<>(requestId, approverId, targetAuthority, reason.toString(), now);
         return Either.right(event);
     }
 }

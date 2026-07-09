@@ -10,7 +10,7 @@ import java.util.Objects;
  * Grounded in Alan Kay's OOP vision, it exposes no identity or initiator getters to the system,
  * relying entirely on behavior evaluation messages.
  */
-public record ExpenseReport(double amount, String purpose) implements ApprovableRequest {
+public record ExpenseReport(double amount, String purpose) implements ApprovableRequest<String, String, String> {
     public ExpenseReport(double amount, String purpose) {
         if (amount < 0) {
             throw new IllegalArgumentException("Amount cannot be negative");
@@ -20,19 +20,19 @@ public record ExpenseReport(double amount, String purpose) implements Approvable
     }
 
     @Override
-    public InitialAssessment evaluateInitialSubmission(Instant now) {
+    public InitialAssessment<String> evaluateInitialSubmission(Instant now) {
         if (amount < 100.0) {
-            return new InitialAssessment(Status.APPROVED, null);
+            return new InitialAssessment<>(Status.APPROVED, null);
         } else if (amount < 1000.0) {
-            return new InitialAssessment(Status.PENDING, "MANAGER");
+            return new InitialAssessment<>(Status.PENDING, "MANAGER");
         } else {
-            return new InitialAssessment(Status.PENDING, "VP");
+            return new InitialAssessment<>(Status.PENDING, "VP");
         }
     }
 
     @Override
-    public Either<String, NextStep> evaluateDecision(
-            ApprovalRecord record,
+    public Either<String, NextStep<String>> evaluateDecision(
+            ApprovalRecord<String, String, String> record,
             String approverId,
             String approverRole,
             DecisionType decisionType,
@@ -49,12 +49,12 @@ public record ExpenseReport(double amount, String purpose) implements Approvable
         }
 
         if (decisionType == DecisionType.REJECT) {
-            return Either.right(new NextStep(Status.REJECTED, null));
+            return Either.right(new NextStep<>(Status.REJECTED, null));
         }
 
         if (decisionType == DecisionType.ESCALATE) {
             if ("MANAGER".equalsIgnoreCase(approverRole)) {
-                return Either.right(new NextStep(Status.ESCALATED, "VP"));
+                return Either.right(new NextStep<>(Status.ESCALATED, "VP"));
             }
             return Either.left("Cannot escalate request from role: " + approverRole);
         }
@@ -62,13 +62,13 @@ public record ExpenseReport(double amount, String purpose) implements Approvable
         // DecisionType.APPROVE
         if ("MANAGER".equalsIgnoreCase(approverRole)) {
             if (amount >= 1000.0) {
-                return Either.right(new NextStep(Status.PENDING, "VP"));
+                return Either.right(new NextStep<>(Status.PENDING, "VP"));
             }
-            return Either.right(new NextStep(Status.APPROVED, null));
+            return Either.right(new NextStep<>(Status.APPROVED, null));
         }
 
         if ("VP".equalsIgnoreCase(approverRole)) {
-            return Either.right(new NextStep(Status.APPROVED, null));
+            return Either.right(new NextStep<>(Status.APPROVED, null));
         }
 
         return Either.left("Unsupported approver role: " + approverRole);

@@ -6,13 +6,13 @@ import java.util.Objects;
 /**
  * Event published when a request is rejected.
  */
-public final class RequestRejected implements ApprovalEvent {
-    private final String requestId;
+public final class RequestRejected<ID, A> implements ApprovalEvent<ID, A> {
+    private final ID requestId;
     private final String rejecterId;
     private final String reason;
     private final Instant occurredAt;
 
-    public RequestRejected(String requestId, String rejecterId, String reason, Instant occurredAt) {
+    public RequestRejected(ID requestId, String rejecterId, String reason, Instant occurredAt) {
         this.requestId = Objects.requireNonNull(requestId);
         this.rejecterId = Objects.requireNonNull(rejecterId);
         this.reason = Objects.requireNonNull(reason);
@@ -20,7 +20,7 @@ public final class RequestRejected implements ApprovalEvent {
     }
 
     @Override
-    public String requestId() { return requestId; }
+    public ID requestId() { return requestId; }
 
     public String rejecterId() { return rejecterId; }
 

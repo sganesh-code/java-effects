@@ -6,14 +6,13 @@ import java.util.Objects;
 /**
  * An immutable decision step in the approval request's audit history.
  */
-public record ApprovalDecision(String stepId, String actorId, String actorRole, DecisionType type, String comment,
-                               Instant timestamp) {
-    public ApprovalDecision(String stepId, String actorId, String actorRole, DecisionType type, String comment, Instant timestamp) {
+public record ApprovalDecision<A, C>(String stepId, String actorId, A actorRole, DecisionType type, C detail, Instant timestamp) {
+    public ApprovalDecision(String stepId, String actorId, A actorRole, DecisionType type, C detail, Instant timestamp) {
         this.stepId = Objects.requireNonNull(stepId);
         this.actorId = Objects.requireNonNull(actorId);
-        this.actorRole = Objects.requireNonNull(actorRole);
+        this.actorRole = actorRole; // Allow null for initiator
         this.type = Objects.requireNonNull(type);
-        this.comment = Objects.requireNonNull(comment);
+        this.detail = Objects.requireNonNull(detail);
         this.timestamp = Objects.requireNonNull(timestamp);
     }
 }

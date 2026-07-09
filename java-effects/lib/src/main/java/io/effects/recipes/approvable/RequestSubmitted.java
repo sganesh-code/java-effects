@@ -6,13 +6,13 @@ import java.util.Objects;
 /**
  * Event published when a request is submitted and enters the pending or escalated state.
  */
-public final class RequestSubmitted implements ApprovalEvent {
-    private final String requestId;
+public final class RequestSubmitted<ID, A> implements ApprovalEvent<ID, A> {
+    private final ID requestId;
     private final String initiatorId;
-    private final String requiredAuthority;
+    private final A requiredAuthority;
     private final Instant occurredAt;
 
-    public RequestSubmitted(String requestId, String initiatorId, String requiredAuthority, Instant occurredAt) {
+    public RequestSubmitted(ID requestId, String initiatorId, A requiredAuthority, Instant occurredAt) {
         this.requestId = Objects.requireNonNull(requestId);
         this.initiatorId = Objects.requireNonNull(initiatorId);
         this.requiredAuthority = requiredAuthority;
@@ -20,11 +20,11 @@ public final class RequestSubmitted implements ApprovalEvent {
     }
 
     @Override
-    public String requestId() { return requestId; }
+    public ID requestId() { return requestId; }
 
     public String initiatorId() { return initiatorId; }
 
-    public String requiredAuthority() { return requiredAuthority; }
+    public A requiredAuthority() { return requiredAuthority; }
 
     @Override
     public Instant occurredAt() { return occurredAt; }

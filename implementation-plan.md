@@ -180,7 +180,7 @@ The following tickets break down the comprehensive refactoring of the `java-effe
       - Add type parameters `<ID, T>`.
       - Propagate `T` specifications across the public API and database state lookups.
 
-- [ ] **🎟️ [TICKET-006]: Generalize `Approvable` Recipe to Support Custom Authority and Detail Models**
+- [x] **🎟️ [TICKET-006]: Generalize `Approvable` Recipe to Support Custom Authority and Detail Models**
   - **Description:** 
     Refactor the `Approvable` recipe to remove primitive `String requiredAuthority` and string-based comment assumptions. We will parameterize the entire package with generic types `<ID, A, C>`, where `ID` represents the request identifier, `A` represents the consumer's custom authority level context (e.g., a cryptographic clearance level, dynamic role entity, or security group), and `C` represents the decision details or comments container (e.g., custom payload records containing digital signatures, reasons, or form attachments).
   - **Scope:**
@@ -191,29 +191,36 @@ The following tickets break down the comprehensive refactoring of the `java-effe
     - **Out of scope:**
       - User directory integrations or active security validations (which should be provided by the consumer's request).
   - **Implementation Tasks:**
-    - [ ] Update `@java-effects/lib/src/main/java/io/effects/recipes/approvable/InitialAssessment.java` to:
+    - [x] Update `@java-effects/lib/src/main/java/io/effects/recipes/approvable/InitialAssessment.java` to:
+      - *Refactored `InitialAssessment` record to use generic type `<A>` and store `A requiredAuthority`.*
       - Add type parameter `<A>`.
       - Store `A requiredAuthority` instead of `String`.
-    - [ ] Update `@java-effects/lib/src/main/java/io/effects/recipes/approvable/NextStep.java` to:
+    - [x] Update `@java-effects/lib/src/main/java/io/effects/recipes/approvable/NextStep.java` to:
+      - *Refactored `NextStep` record to use generic type `<A>` and store `A nextRequiredAuthority`.*
       - Add type parameter `<A>`.
       - Store `A nextRequiredAuthority` instead of `String`.
-    - [ ] Update `@java-effects/lib/src/main/java/io/effects/recipes/approvable/ApprovalDecision.java` to:
+    - [x] Update `@java-effects/lib/src/main/java/io/effects/recipes/approvable/ApprovalDecision.java` to:
+      - *Refactored `ApprovalDecision` record to use generic types `<A, C>`, replacing raw string role and comment with generic `A actorRole` and `C detail`.*
       - Add type parameters `<A, C>`.
       - Store `String approverId`, `A approverRole`, and `C detail` instead of simple strings.
-    - [ ] Update `@java-effects/lib/src/main/java/io/effects/recipes/approvable/ApprovalEvent.java` and its subclasses (`RequestSubmitted`, `RequestApproved`, `RequestRejected`, `RequestEscalated`):
+    - [x] Update `@java-effects/lib/src/main/java/io/effects/recipes/approvable/ApprovalEvent.java` and its subclasses (`RequestSubmitted`, `RequestApproved`, `RequestRejected`, `RequestEscalated`):
+      - *Refactored `ApprovalEvent` and implementing records (`RequestSubmitted`, `RequestApproved`, `RequestRejected`, `RequestEscalated`) to be generic `<ID, A>` instead of using raw string identifiers and authorities.*
       - Add type parameters `<ID, A>`.
       - Store generic types.
-    - [ ] Update `@java-effects/lib/src/main/java/io/effects/recipes/approvable/ApprovableRequest.java` to:
+    - [x] Update `@java-effects/lib/src/main/java/io/effects/recipes/approvable/ApprovableRequest.java` to:
+      - *Refactored `ApprovableRequest` interface to add generic types `<ID, A, C>` and updated all evaluate methods.*
       - Add type parameters `<ID, A, C>`.
       - Refactor signatures:
         - `InitialAssessment<A> evaluateInitialSubmission(Instant now);`
         - `Either<String, NextStep<A>> evaluateDecision(ApprovalRecord<ID, A, C> record, String approverId, A approverRole, DecisionType decisionType, C detail, Instant now);`
-    - [ ] Update `@java-effects/lib/src/main/java/io/effects/recipes/approvable/ApprovalRecord.java` to:
+    - [x] Update `@java-effects/lib/src/main/java/io/effects/recipes/approvable/ApprovalRecord.java` to:
+      - *Refactored `ApprovalRecord` to use generic types `<ID, A, C>` and delegate all decision validation via double-dispatch.*
       - Add type parameters `<ID, A, C>`.
       - Replace `String requestId` with `ID requestId` and track `A requiredAuthority` with generic type.
       - Store `List<ApprovalDecision<A, C>> history`.
       - Delegate all validation to `ApprovableRequest` using double-dispatch.
-    - [ ] Update `@java-effects/lib/src/main/java/io/effects/recipes/approvable/ApprovalProcess.java` to:
+    - [x] Update `@java-effects/lib/src/main/java/io/effects/recipes/approvable/ApprovalProcess.java` to:
+      - *Refactored `ApprovalProcess` to be parameterized by `<ID, A, C>`, ensuring that all state management and events are mapped to generic types.*
       - Add type parameters `<ID, A, C>`.
       - Map orchestration logic and repositories to use these parameterized types.
 

@@ -11,24 +11,25 @@ import java.time.Instant;
  * The monadic shell (ApprovalProcess) is responsible for lifting these pure synchronous
  * evaluations safely into the lazy, concurrent IO context.
  */
-public interface ApprovableRequest {
+public interface ApprovableRequest<ID, A, C> {
 
     /**
-     * Determines the initial approval status and required authority for this request.
-     * Some requests might be auto-approved, while others require a specific level of authority.
+     * Behavioral Message: Evaluates whether the initial submission is allowed, and returns
+     * the initial status and required authority.
      */
-    InitialAssessment evaluateInitialSubmission(Instant now);
+    InitialAssessment<A> evaluateInitialSubmission(Instant now);
 
     /**
-     * Evaluates a decision step (approve, reject, or escalate).
-     * Returns the next status and next required authority on the Right, or a validation/rejection error message on the Left.
+     * Behavioral Message: Evaluates a decision (e.g. approve, reject, escalate) against current rules.
+     * Receives the approval record (state ledger) and current action context to decide
+     * the next status and next required authority.
      */
-    Either<String, NextStep> evaluateDecision(
-        ApprovalRecord record, 
+    Either<String, NextStep<A>> evaluateDecision(
+        ApprovalRecord<ID, A, C> record, 
         String approverId, 
-        String approverRole, 
+        A approverRole, 
         DecisionType decisionType, 
-        String comment, 
+        C detail, 
         Instant now
     );
 }
