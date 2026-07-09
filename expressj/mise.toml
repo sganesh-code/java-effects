@@ -1,0 +1,3 @@
+[tools]
+java = "zulu-21.42.19"
+gradle = "8.10.2"
