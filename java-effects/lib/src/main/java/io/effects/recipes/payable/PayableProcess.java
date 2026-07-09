@@ -9,19 +9,17 @@ import io.effects.ports.TelemetryPort;
 import io.effects.adapters.InMemoryEventPublisher;
 import io.effects.adapters.InMemoryStateRepository;
 import io.effects.adapters.NoOpTelemetryPort;
+import io.effects.recipes.TransitionResult;
 import java.time.Instant;
 import java.util.Objects;
-import java.util.UUID;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
 /**
  * An Object-Oriented "Recipe" representing a Payment Process Manager.
- * It coordinates routing messages, evaluating domain invariants, persistence, event emission, and telemetry.
- * 
- * In accordance with our architectural boundary, this process represents the monadic infrastructure
- * engine, and thus exposes purely monadic APIs (returning IO) to allow lazy, virtual-thread execution,
- * cancellation, and pipeline composition.
+ * It coordinates monadic persistence lookup, domain aggregation, and event publishing,
+ * completely decoupled from business logic invariants (which reside inside PaymentLedger).
  */
 public final class PayableProcess {
     private final StateRepository<String, PaymentLedger> repository;
@@ -78,29 +76,22 @@ public final class PayableProcess {
         return ForIO.set(IO.delay(System::currentTimeMillis))
             .bind(startTime -> repository.find(paymentId))
             .bind((startTime, optRecord) -> {
-                PaymentLedger ledger = optRecord.orElseGet(() -> new PaymentLedger(paymentId));
-
-                if (ledger.status() != PaymentLedger.Status.INITIAL) {
-                    return IO.of(Either.<String, PaymentLedger>left("Cannot authorize: payment already initiated (current status: " + ledger.status() + ")"));
+                if (optRecord.isPresent() && optRecord.get().status() != PaymentLedger.Status.INITIAL) {
+                    return IO.of(Either.<String, PaymentLedger>left("Cannot authorize: payment already initiated (current status: " + optRecord.get().status() + ")"));
                 }
 
-                // Invoke pure domain double dispatch validation synchronously
-                Either<String, Void> eitherValid = payment.evaluateAuthorization(ledger, amount, currency, now);
-                if (eitherValid.isLeft()) {
-                    return IO.of(Either.<String, PaymentLedger>left(eitherValid.getLeft()));
-                }
-
-                PaymentStep step = new PaymentStep(
-                    UUID.randomUUID().toString(),
-                    actorId,
-                    PaymentStep.Type.AUTHORIZE,
-                    amount,
-                    "Payment authorized",
-                    now
+                // Delegate creation and transition to rich aggregate factory
+                Either<String, TransitionResult<PaymentLedger, PaymentEvent>> authResult = PaymentLedger.authorize(
+                    paymentId, actorId, amount, currency, payment, now
                 );
-                ledger.recordStep(step, PaymentLedger.Status.AUTHORIZED, amount, 0.0, 0.0, currency);
 
-                PaymentEvent event = new PaymentAuthorized(paymentId, amount, currency, now);
+                if (authResult.isLeft()) {
+                    return IO.of(Either.<String, PaymentLedger>left(authResult.getLeft()));
+                }
+
+                TransitionResult<PaymentLedger, PaymentEvent> result = authResult.getRight();
+                PaymentLedger ledger = result.aggregate();
+                PaymentEvent event = result.event();
 
                 return repository.save(paymentId, ledger)
                     .flatMap(v -> publisher.publish(event))
@@ -133,31 +124,18 @@ public final class PayableProcess {
                 }
 
                 PaymentLedger ledger = optRecord.get();
-                if (ledger.status() != PaymentLedger.Status.AUTHORIZED && ledger.status() != PaymentLedger.Status.CAPTURED) {
-                    return IO.of(Either.<String, PaymentLedger>left("Cannot capture payment in current status: " + ledger.status()));
+
+                // Delegate execution directly to rich aggregate!
+                Either<String, PaymentEvent> eitherEvent = ledger.capture(actorId, amount, comment, payment, now);
+                if (eitherEvent.isLeft()) {
+                    return IO.of(Either.<String, PaymentLedger>left(eitherEvent.getLeft()));
                 }
 
-                // Invoke pure domain double dispatch validation synchronously
-                Either<String, Void> eitherValid = payment.evaluateCapture(ledger, amount, now);
-                if (eitherValid.isLeft()) {
-                    return IO.of(Either.<String, PaymentLedger>left(eitherValid.getLeft()));
-                }
-
-                PaymentStep step = new PaymentStep(
-                    UUID.randomUUID().toString(),
-                    actorId,
-                    PaymentStep.Type.CAPTURE,
-                    amount,
-                    comment,
-                    now
-                );
-                // Reduce authorized amount by captured amount, and increase captured amount
-                ledger.recordStep(step, PaymentLedger.Status.CAPTURED, -amount, amount, 0.0, null);
-
-                PaymentEvent event = new PaymentCaptured(paymentId, amount, now);
+                PaymentEvent event = eitherEvent.getRight();
+                IO<Void> publishIO = event != null ? publisher.publish(event) : IO.of(null);
 
                 return repository.save(paymentId, ledger)
-                    .flatMap(v -> publisher.publish(event))
+                    .flatMap(v -> publishIO)
                     .flatMap(v -> telemetry.recordSuccess("payable", paymentId + ":capture"))
                     .flatMap(v -> telemetry.recordDuration("payable", paymentId, System.currentTimeMillis() - startTime))
                     .map(v -> Either.<String, PaymentLedger>right(ledger));
@@ -187,31 +165,18 @@ public final class PayableProcess {
                 }
 
                 PaymentLedger ledger = optRecord.get();
-                if (ledger.status() != PaymentLedger.Status.AUTHORIZED) {
-                    return IO.of(Either.<String, PaymentLedger>left("Cannot reverse: payment status is not AUTHORIZED (current status: " + ledger.status() + ")"));
+
+                // Delegate execution directly to rich aggregate!
+                Either<String, PaymentEvent> eitherEvent = ledger.reverse(actorId, reason, payment, now);
+                if (eitherEvent.isLeft()) {
+                    return IO.of(Either.<String, PaymentLedger>left(eitherEvent.getLeft()));
                 }
 
-                // Invoke pure domain double dispatch validation synchronously
-                Either<String, Void> eitherValid = payment.evaluateReversal(ledger, now);
-                if (eitherValid.isLeft()) {
-                    return IO.of(Either.<String, PaymentLedger>left(eitherValid.getLeft()));
-                }
-
-                PaymentStep step = new PaymentStep(
-                    UUID.randomUUID().toString(),
-                    actorId,
-                    PaymentStep.Type.REVERSE,
-                    ledger.authorizedAmount(),
-                    reason,
-                    now
-                );
-                double originalAuth = ledger.authorizedAmount();
-                ledger.recordStep(step, PaymentLedger.Status.REVERSED, -originalAuth, 0.0, 0.0, null);
-
-                PaymentEvent event = new PaymentReversed(paymentId, now);
+                PaymentEvent event = eitherEvent.getRight();
+                IO<Void> publishIO = event != null ? publisher.publish(event) : IO.of(null);
 
                 return repository.save(paymentId, ledger)
-                    .flatMap(v -> publisher.publish(event))
+                    .flatMap(v -> publishIO)
                     .flatMap(v -> telemetry.recordSuccess("payable", paymentId + ":reverse"))
                     .flatMap(v -> telemetry.recordDuration("payable", paymentId, System.currentTimeMillis() - startTime))
                     .map(v -> Either.<String, PaymentLedger>right(ledger));
@@ -241,36 +206,18 @@ public final class PayableProcess {
                 }
 
                 PaymentLedger ledger = optRecord.get();
-                if (ledger.status() != PaymentLedger.Status.CAPTURED && ledger.status() != PaymentLedger.Status.PARTIALLY_REFUNDED) {
-                    return IO.of(Either.<String, PaymentLedger>left("Cannot refund payment in current status: " + ledger.status()));
+
+                // Delegate execution directly to rich aggregate!
+                Either<String, PaymentEvent> eitherEvent = ledger.refund(actorId, amount, reason, payment, now);
+                if (eitherEvent.isLeft()) {
+                    return IO.of(Either.<String, PaymentLedger>left(eitherEvent.getLeft()));
                 }
 
-                // Invoke pure domain double dispatch validation synchronously
-                Either<String, Void> eitherValid = payment.evaluateRefund(ledger, amount, now);
-                if (eitherValid.isLeft()) {
-                    return IO.of(Either.<String, PaymentLedger>left(eitherValid.getLeft()));
-                }
-
-                PaymentStep step = new PaymentStep(
-                    UUID.randomUUID().toString(),
-                    actorId,
-                    PaymentStep.Type.REFUND,
-                    amount,
-                    reason,
-                    now
-                );
-
-                double nextRefunded = ledger.refundedAmount() + amount;
-                PaymentLedger.Status nextStatus = nextRefunded >= ledger.capturedAmount() 
-                    ? PaymentLedger.Status.REFUNDED 
-                    : PaymentLedger.Status.PARTIALLY_REFUNDED;
-
-                ledger.recordStep(step, nextStatus, 0.0, 0.0, amount, null);
-
-                PaymentEvent event = new PaymentRefunded(paymentId, amount, now);
+                PaymentEvent event = eitherEvent.getRight();
+                IO<Void> publishIO = event != null ? publisher.publish(event) : IO.of(null);
 
                 return repository.save(paymentId, ledger)
-                    .flatMap(v -> publisher.publish(event))
+                    .flatMap(v -> publishIO)
                     .flatMap(v -> telemetry.recordSuccess("payable", paymentId + ":refund"))
                     .flatMap(v -> telemetry.recordDuration("payable", paymentId, System.currentTimeMillis() - startTime))
                     .map(v -> Either.<String, PaymentLedger>right(ledger));

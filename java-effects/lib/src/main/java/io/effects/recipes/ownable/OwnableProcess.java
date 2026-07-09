@@ -9,19 +9,17 @@ import io.effects.ports.TelemetryPort;
 import io.effects.adapters.InMemoryEventPublisher;
 import io.effects.adapters.InMemoryStateRepository;
 import io.effects.adapters.NoOpTelemetryPort;
+import io.effects.recipes.TransitionResult;
 import java.time.Instant;
 import java.util.Objects;
-import java.util.UUID;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
 /**
  * An Object-Oriented "Recipe" representing an Ownership Process Manager.
- * It coordinates routing messages, evaluating domain invariants, persistence, event emission, and telemetry.
- * 
- * In accordance with our architectural boundary, this process represents the monadic infrastructure
- * engine, and thus exposes purely monadic APIs (returning IO) to allow lazy, virtual-thread execution,
- * cancellation, and pipeline composition.
+ * It coordinates monadic persistence lookup, domain aggregation, and event publishing,
+ * completely decoupled from business logic invariants (which reside inside OwnershipRecord).
  */
 public final class OwnableProcess {
     private final StateRepository<String, OwnershipRecord> repository;
@@ -77,28 +75,22 @@ public final class OwnableProcess {
         return ForIO.set(IO.delay(System::currentTimeMillis))
             .bind(startTime -> repository.find(assetId))
             .bind((startTime, optRecord) -> {
-                OwnershipRecord record = optRecord.orElseGet(() -> new OwnershipRecord(assetId));
-
-                if (record.hasOwner()) {
-                    return IO.of(Either.<String, OwnershipRecord>left("Asset already has an active owner: " + record.currentOwnerId()));
+                if (optRecord.isPresent() && optRecord.get().hasOwner()) {
+                    return IO.of(Either.<String, OwnershipRecord>left("Asset already has an active owner: " + optRecord.get().currentOwnerId()));
                 }
 
-                // Invoke pure domain trial synchronously
-                Either<String, Void> eitherValid = asset.evaluateInitialAssignment(ownerId, now);
-                if (eitherValid.isLeft()) {
-                    return IO.of(Either.<String, OwnershipRecord>left(eitherValid.getLeft()));
-                }
-
-                OwnershipStep step = new OwnershipStep(
-                    UUID.randomUUID().toString(),
-                    ownerId,
-                    OwnershipStep.Type.ASSIGN,
-                    "Initial ownership assignment",
-                    now
+                // Delegate creation and transition to rich aggregate factory
+                Either<String, TransitionResult<OwnershipRecord, OwnershipEvent>> assignResult = OwnershipRecord.assign(
+                    assetId, ownerId, asset, now
                 );
-                record.recordTransfer(step, ownerId);
 
-                OwnershipEvent event = new OwnershipAssigned(assetId, ownerId, now);
+                if (assignResult.isLeft()) {
+                    return IO.of(Either.<String, OwnershipRecord>left(assignResult.getLeft()));
+                }
+
+                TransitionResult<OwnershipRecord, OwnershipEvent> result = assignResult.getRight();
+                OwnershipRecord record = result.aggregate();
+                OwnershipEvent event = result.event();
 
                 return repository.save(assetId, record)
                     .flatMap(v -> publisher.publish(event))
@@ -140,32 +132,18 @@ public final class OwnableProcess {
                 }
 
                 OwnershipRecord record = optRecord.get();
-                if (!record.hasOwner()) {
-                    return IO.of(Either.<String, OwnershipRecord>left("Cannot transfer: asset has no active owner"));
-                }
-                if (!record.currentOwnerId().equals(currentOwnerId)) {
-                    return IO.of(Either.<String, OwnershipRecord>left("Current owner mismatch: expected " + record.currentOwnerId() + " but got " + currentOwnerId));
-                }
 
-                // Invoke pure domain trial synchronously
-                Either<String, Void> eitherValid = asset.evaluateTransfer(record, currentOwnerId, proposedOwnerId, actorId, now);
-                if (eitherValid.isLeft()) {
-                    return IO.of(Either.<String, OwnershipRecord>left(eitherValid.getLeft()));
+                // Delegate execution directly to rich aggregate!
+                Either<String, OwnershipEvent> eitherEvent = record.transfer(currentOwnerId, proposedOwnerId, actorId, comment, asset, now);
+                if (eitherEvent.isLeft()) {
+                    return IO.of(Either.<String, OwnershipRecord>left(eitherEvent.getLeft()));
                 }
 
-                OwnershipStep step = new OwnershipStep(
-                    UUID.randomUUID().toString(),
-                    actorId,
-                    OwnershipStep.Type.TRANSFER,
-                    comment,
-                    now
-                );
-                record.recordTransfer(step, proposedOwnerId);
-
-                OwnershipEvent event = new OwnershipTransferred(assetId, currentOwnerId, proposedOwnerId, now);
+                OwnershipEvent event = eitherEvent.getRight();
+                IO<Void> publishIO = event != null ? publisher.publish(event) : IO.of(null);
 
                 return repository.save(assetId, record)
-                    .flatMap(v -> publisher.publish(event))
+                    .flatMap(v -> publishIO)
                     .flatMap(v -> telemetry.recordSuccess("ownable", assetId + ":transfer"))
                     .flatMap(v -> telemetry.recordDuration("ownable", assetId, System.currentTimeMillis() - startTime))
                     .map(v -> Either.<String, OwnershipRecord>right(record));
@@ -202,32 +180,18 @@ public final class OwnableProcess {
                 }
 
                 OwnershipRecord record = optRecord.get();
-                if (!record.hasOwner()) {
-                    return IO.of(Either.<String, OwnershipRecord>left("Cannot revoke: asset has no active owner"));
-                }
-                if (!record.currentOwnerId().equals(currentOwnerId)) {
-                    return IO.of(Either.<String, OwnershipRecord>left("Current owner mismatch: expected " + record.currentOwnerId() + " but got " + currentOwnerId));
-                }
 
-                // Invoke pure domain trial synchronously
-                Either<String, Void> eitherValid = asset.evaluateTransfer(record, currentOwnerId, null, actorId, now);
-                if (eitherValid.isLeft()) {
-                    return IO.of(Either.<String, OwnershipRecord>left(eitherValid.getLeft()));
+                // Delegate execution directly to rich aggregate!
+                Either<String, OwnershipEvent> eitherEvent = record.revoke(currentOwnerId, actorId, reason, asset, now);
+                if (eitherEvent.isLeft()) {
+                    return IO.of(Either.<String, OwnershipRecord>left(eitherEvent.getLeft()));
                 }
 
-                OwnershipStep step = new OwnershipStep(
-                    UUID.randomUUID().toString(),
-                    actorId,
-                    OwnershipStep.Type.REVOKE,
-                    reason,
-                    now
-                );
-                record.recordTransfer(step, null);
-
-                OwnershipEvent event = new OwnershipRevoked(assetId, currentOwnerId, now);
+                OwnershipEvent event = eitherEvent.getRight();
+                IO<Void> publishIO = event != null ? publisher.publish(event) : IO.of(null);
 
                 return repository.save(assetId, record)
-                    .flatMap(v -> publisher.publish(event))
+                    .flatMap(v -> publishIO)
                     .flatMap(v -> telemetry.recordSuccess("ownable", assetId + ":revoke"))
                     .flatMap(v -> telemetry.recordDuration("ownable", assetId, System.currentTimeMillis() - startTime))
                     .map(v -> Either.<String, OwnershipRecord>right(record));

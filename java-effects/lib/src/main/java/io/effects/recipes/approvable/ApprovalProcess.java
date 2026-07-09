@@ -9,20 +9,17 @@ import io.effects.ports.TelemetryPort;
 import io.effects.adapters.InMemoryEventPublisher;
 import io.effects.adapters.InMemoryStateRepository;
 import io.effects.adapters.NoOpTelemetryPort;
+import io.effects.recipes.TransitionResult;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
 /**
  * An Object-Oriented "Recipe" representing an Approval Process Manager.
- * It coordinates routing messages, evaluating domain invariants, persistence, event emission, and telemetry.
- * 
- * In accordance with our architectural boundary, this process represents the monadic infrastructure
- * engine, and thus exposes purely monadic APIs (returning IO) to allow lazy, virtual-thread execution,
- * cancellation, and pipeline composition.
+ * It coordinates monadic persistence lookup, domain aggregation, and event publishing,
+ * completely decoupled from business logic invariants (which reside inside ApprovalRecord).
  */
 public final class ApprovalProcess {
     private final StateRepository<String, ApprovalRecord> repository;
@@ -51,7 +48,7 @@ public final class ApprovalProcess {
     }
 
     /**
-     * Registers a behavioral request domain object.
+     * Registers a behavioral ownable request domain object.
      */
     public IO<Void> register(String requestId, ApprovableRequest request) {
         Objects.requireNonNull(requestId);
@@ -82,31 +79,18 @@ public final class ApprovalProcess {
                     return IO.of(Either.<String, ApprovalRecord>left("Request already submitted: " + requestId));
                 }
 
-                // Invoke pure synchronous domain trial
-                InitialAssessment assessment = request.evaluateInitialSubmission(now);
-                ApprovalRecord record = new ApprovalRecord(
-                    requestId,
-                    initiatorId,
-                    Status.PENDING,
-                    null
+                // Delegate creation and transition to rich aggregate factory
+                Either<String, TransitionResult<ApprovalRecord, ApprovalEvent>> submitResult = ApprovalRecord.submit(
+                    requestId, initiatorId, request, now
                 );
 
-                ApprovalDecision submitDecision = new ApprovalDecision(
-                    UUID.randomUUID().toString(),
-                    initiatorId,
-                    "INITIATOR",
-                    DecisionType.APPROVE,
-                    "Submitted for approval",
-                    now
-                );
-                record.recordDecision(submitDecision, assessment.initialStatus(), assessment.requiredAuthority());
-
-                ApprovalEvent event;
-                if (record.status() == Status.APPROVED) {
-                    event = new RequestApproved(requestId, initiatorId, "AUTO_APPROVED", now);
-                } else {
-                    event = new RequestSubmitted(requestId, initiatorId, record.requiredAuthority(), now);
+                if (submitResult.isLeft()) {
+                    return IO.of(Either.<String, ApprovalRecord>left(submitResult.getLeft()));
                 }
+
+                TransitionResult<ApprovalRecord, ApprovalEvent> result = submitResult.getRight();
+                ApprovalRecord record = result.aggregate();
+                ApprovalEvent event = result.event();
 
                 return repository.save(record.requestId(), record)
                     .flatMap(v -> publisher.publish(event))
@@ -140,42 +124,18 @@ public final class ApprovalProcess {
                 }
 
                 ApprovalRecord record = optRecord.get();
-                if (record.status() == Status.APPROVED) {
-                    return IO.of(Either.<String, ApprovalRecord>right(record)); // Idempotent success
-                }
-                if (record.status() == Status.REJECTED) {
-                    return IO.of(Either.<String, ApprovalRecord>left("Cannot approve a rejected request: " + requestId));
-                }
 
-                // Invoke pure synchronous domain decision evaluation
-                Either<String, NextStep> eitherNext = request.evaluateDecision(
-                    record, approverId, approverRole, DecisionType.APPROVE, comment, now
-                );
-
-                if (eitherNext.isLeft()) {
-                    return IO.of(Either.<String, ApprovalRecord>left(eitherNext.getLeft()));
+                // Delegate execution directly to rich aggregate!
+                Either<String, ApprovalEvent> eitherEvent = record.approve(approverId, approverRole, comment, request, now);
+                if (eitherEvent.isLeft()) {
+                    return IO.of(Either.<String, ApprovalRecord>left(eitherEvent.getLeft()));
                 }
 
-                NextStep next = eitherNext.getRight();
-                ApprovalDecision decision = new ApprovalDecision(
-                    UUID.randomUUID().toString(),
-                    approverId,
-                    approverRole,
-                    DecisionType.APPROVE,
-                    comment,
-                    now
-                );
-                record.recordDecision(decision, next.nextStatus(), next.nextRequiredAuthority());
-
-                ApprovalEvent event;
-                if (record.status() == Status.APPROVED) {
-                    event = new RequestApproved(requestId, approverId, comment, now);
-                } else {
-                    event = new RequestSubmitted(requestId, record.initiatorId(), record.requiredAuthority(), now);
-                }
+                ApprovalEvent event = eitherEvent.getRight();
+                IO<Void> publishIO = event != null ? publisher.publish(event) : IO.of(null);
 
                 return repository.save(record.requestId(), record)
-                    .flatMap(v -> publisher.publish(event))
+                    .flatMap(v -> publishIO)
                     .flatMap(v -> telemetry.recordSuccess("approvable", requestId + ":approve"))
                     .flatMap(v -> telemetry.recordDuration("approvable", requestId, System.currentTimeMillis() - startTime))
                     .map(v -> Either.<String, ApprovalRecord>right(record));
@@ -206,36 +166,18 @@ public final class ApprovalProcess {
                 }
 
                 ApprovalRecord record = optRecord.get();
-                if (record.status() == Status.REJECTED) {
-                    return IO.of(Either.<String, ApprovalRecord>right(record)); // Idempotent success
-                }
-                if (record.status() == Status.APPROVED) {
-                    return IO.of(Either.<String, ApprovalRecord>left("Cannot reject an already approved request: " + requestId));
-                }
 
-                // Invoke pure synchronous domain decision evaluation
-                Either<String, NextStep> eitherNext = request.evaluateDecision(
-                    record, approverId, approverRole, DecisionType.REJECT, reason, now
-                );
-
-                if (eitherNext.isLeft()) {
-                    return IO.of(Either.<String, ApprovalRecord>left(eitherNext.getLeft()));
+                // Delegate execution directly to rich aggregate!
+                Either<String, ApprovalEvent> eitherEvent = record.reject(approverId, approverRole, reason, request, now);
+                if (eitherEvent.isLeft()) {
+                    return IO.of(Either.<String, ApprovalRecord>left(eitherEvent.getLeft()));
                 }
 
-                ApprovalDecision decision = new ApprovalDecision(
-                    UUID.randomUUID().toString(),
-                    approverId,
-                    approverRole,
-                    DecisionType.REJECT,
-                    reason,
-                    now
-                );
-                record.recordDecision(decision, Status.REJECTED, null);
-
-                ApprovalEvent event = new RequestRejected(requestId, approverId, reason, now);
+                ApprovalEvent event = eitherEvent.getRight();
+                IO<Void> publishIO = event != null ? publisher.publish(event) : IO.of(null);
 
                 return repository.save(record.requestId(), record)
-                    .flatMap(v -> publisher.publish(event))
+                    .flatMap(v -> publishIO)
                     .flatMap(v -> telemetry.recordFailure("approvable", requestId + ":reject", reason))
                     .flatMap(v -> telemetry.recordDuration("approvable", requestId, System.currentTimeMillis() - startTime))
                     .map(v -> Either.<String, ApprovalRecord>right(record));
@@ -267,33 +209,18 @@ public final class ApprovalProcess {
                 }
 
                 ApprovalRecord record = optRecord.get();
-                if (record.isTerminal()) {
-                    return IO.of(Either.<String, ApprovalRecord>left("Cannot escalate a finalized request: " + requestId));
+
+                // Delegate execution directly to rich aggregate!
+                Either<String, ApprovalEvent> eitherEvent = record.escalate(approverId, approverRole, targetAuthority, reason, request, now);
+                if (eitherEvent.isLeft()) {
+                    return IO.of(Either.<String, ApprovalRecord>left(eitherEvent.getLeft()));
                 }
 
-                // Invoke pure synchronous domain decision evaluation
-                Either<String, NextStep> eitherNext = request.evaluateDecision(
-                    record, approverId, approverRole, DecisionType.ESCALATE, reason, now
-                );
-
-                if (eitherNext.isLeft()) {
-                    return IO.of(Either.<String, ApprovalRecord>left(eitherNext.getLeft()));
-                }
-
-                ApprovalDecision decision = new ApprovalDecision(
-                    UUID.randomUUID().toString(),
-                    approverId,
-                    approverRole,
-                    DecisionType.ESCALATE,
-                    reason,
-                    now
-                );
-                record.recordDecision(decision, Status.ESCALATED, targetAuthority);
-
-                ApprovalEvent event = new RequestEscalated(requestId, approverId, targetAuthority, reason, now);
+                ApprovalEvent event = eitherEvent.getRight();
+                IO<Void> publishIO = event != null ? publisher.publish(event) : IO.of(null);
 
                 return repository.save(record.requestId(), record)
-                    .flatMap(v -> publisher.publish(event))
+                    .flatMap(v -> publishIO)
                     .flatMap(v -> telemetry.recordSuccess("approvable", requestId + ":escalate"))
                     .flatMap(v -> telemetry.recordDuration("approvable", requestId, System.currentTimeMillis() - startTime))
                     .map(v -> Either.<String, ApprovalRecord>right(record));

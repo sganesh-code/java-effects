@@ -12,17 +12,13 @@ import io.effects.adapters.NoOpTelemetryPort;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
 /**
  * An Object-Oriented "Recipe" representing a Fulfillment Process Manager.
- * It coordinates routing messages, evaluating domain invariants, persistence, event emission, and telemetry.
- * 
- * In accordance with our architectural boundary, this process represents the monadic infrastructure
- * engine, and thus exposes purely monadic APIs (returning IO) to allow lazy, virtual-thread execution,
- * cancellation, and pipeline composition.
+ * It coordinates monadic persistence lookup, domain aggregation, and event publishing,
+ * completely decoupled from business logic invariants (which reside inside FulfillmentLedger).
  */
 public final class FulfillmentProcess {
     private final StateRepository<String, FulfillmentLedger> repository;
@@ -67,11 +63,7 @@ public final class FulfillmentProcess {
      */
     public IO<Void> initiate(String fulfillmentId, int totalQuantity) {
         Objects.requireNonNull(fulfillmentId);
-        return ledgerRepository().save(fulfillmentId, new FulfillmentLedger(fulfillmentId, totalQuantity));
-    }
-
-    private StateRepository<String, FulfillmentLedger> ledgerRepository() {
-        return repository;
+        return repository.save(fulfillmentId, FulfillmentLedger.initiate(fulfillmentId, totalQuantity));
     }
 
     /**
@@ -96,30 +88,18 @@ public final class FulfillmentProcess {
                 }
 
                 FulfillmentLedger ledger = optLedger.get();
-                if (ledger.status() != FulfillmentLedger.Status.INITIAL && ledger.status() != FulfillmentLedger.Status.ALLOCATING) {
-                    return IO.of(Either.<String, FulfillmentLedger>left("Cannot allocate in current status: " + ledger.status()));
+
+                // Delegate execution directly to rich aggregate!
+                Either<String, FulfillmentEvent> eitherEvent = ledger.allocate(actorId, quantity, comment, request, now);
+                if (eitherEvent.isLeft()) {
+                    return IO.of(Either.<String, FulfillmentLedger>left(eitherEvent.getLeft()));
                 }
 
-                // Invoke pure domain double dispatch validation synchronously
-                Either<String, Void> eitherValid = request.evaluateAllocation(ledger, quantity, now);
-                if (eitherValid.isLeft()) {
-                    return IO.of(Either.<String, FulfillmentLedger>left(eitherValid.getLeft()));
-                }
-
-                FulfillmentStep step = new FulfillmentStep(
-                    UUID.randomUUID().toString(),
-                    actorId,
-                    FulfillmentStep.Type.ALLOCATE,
-                    quantity,
-                    comment,
-                    now
-                );
-                ledger.recordStep(step, FulfillmentLedger.Status.ALLOCATING, quantity, 0);
-
-                FulfillmentEvent event = new FulfillmentAllocated(fulfillmentId, quantity, now);
+                FulfillmentEvent event = eitherEvent.getRight();
+                IO<Void> publishIO = event != null ? publisher.publish(event) : IO.of(null);
 
                 return repository.save(fulfillmentId, ledger)
-                    .flatMap(v -> publisher.publish(event))
+                    .flatMap(v -> publishIO)
                     .flatMap(v -> telemetry.recordSuccess("fulfillable", fulfillmentId + ":allocate"))
                     .flatMap(v -> telemetry.recordDuration("fulfillable", fulfillmentId, System.currentTimeMillis() - startTime))
                     .map(v -> Either.<String, FulfillmentLedger>right(ledger));
@@ -149,27 +129,18 @@ public final class FulfillmentProcess {
                 }
 
                 FulfillmentLedger ledger = optLedger.get();
-                if (ledger.status() != FulfillmentLedger.Status.ALLOCATING && ledger.status() != FulfillmentLedger.Status.PACKAGING) {
-                    return IO.of(Either.<String, FulfillmentLedger>left("Cannot package in current status: " + ledger.status()));
+
+                // Delegate execution directly to rich aggregate!
+                Either<String, FulfillmentEvent> eitherEvent = ledger.packageItems(actorId, quantity, comment, request, now);
+                if (eitherEvent.isLeft()) {
+                    return IO.of(Either.<String, FulfillmentLedger>left(eitherEvent.getLeft()));
                 }
 
-                // Invoke pure domain double dispatch validation synchronously
-                Either<String, Void> eitherValid = request.evaluatePackaging(ledger, quantity, now);
-                if (eitherValid.isLeft()) {
-                    return IO.of(Either.<String, FulfillmentLedger>left(eitherValid.getLeft()));
-                }
-
-                FulfillmentStep step = new FulfillmentStep(
-                    UUID.randomUUID().toString(),
-                    actorId,
-                    FulfillmentStep.Type.PACKAGE,
-                    quantity,
-                    comment,
-                    now
-                );
-                ledger.recordStep(step, FulfillmentLedger.Status.PACKAGING, 0, quantity);
+                FulfillmentEvent event = eitherEvent.getRight();
+                IO<Void> publishIO = event != null ? publisher.publish(event) : IO.of(null);
 
                 return repository.save(fulfillmentId, ledger)
+                    .flatMap(v -> publishIO)
                     .flatMap(v -> telemetry.recordSuccess("fulfillable", fulfillmentId + ":package"))
                     .flatMap(v -> telemetry.recordDuration("fulfillable", fulfillmentId, System.currentTimeMillis() - startTime))
                     .map(v -> Either.<String, FulfillmentLedger>right(ledger));
@@ -199,30 +170,18 @@ public final class FulfillmentProcess {
                 }
 
                 FulfillmentLedger ledger = optLedger.get();
-                if (ledger.status() != FulfillmentLedger.Status.PACKAGING) {
-                    return IO.of(Either.<String, FulfillmentLedger>left("Cannot dispatch in current status: " + ledger.status()));
+
+                // Delegate execution directly to rich aggregate!
+                Either<String, FulfillmentEvent> eitherEvent = ledger.dispatch(actorId, comment, request, now);
+                if (eitherEvent.isLeft()) {
+                    return IO.of(Either.<String, FulfillmentLedger>left(eitherEvent.getLeft()));
                 }
 
-                // Invoke pure domain double dispatch validation synchronously
-                Either<String, Void> eitherValid = request.evaluateDispatch(ledger, now);
-                if (eitherValid.isLeft()) {
-                    return IO.of(Either.<String, FulfillmentLedger>left(eitherValid.getLeft()));
-                }
-
-                FulfillmentStep step = new FulfillmentStep(
-                    UUID.randomUUID().toString(),
-                    actorId,
-                    FulfillmentStep.Type.DISPATCH,
-                    ledger.packagedQuantity(),
-                    comment,
-                    now
-                );
-                ledger.recordStep(step, FulfillmentLedger.Status.DISPATCHED, 0, 0);
-
-                FulfillmentEvent event = new FulfillmentDispatched(fulfillmentId, now);
+                FulfillmentEvent event = eitherEvent.getRight();
+                IO<Void> publishIO = event != null ? publisher.publish(event) : IO.of(null);
 
                 return repository.save(fulfillmentId, ledger)
-                    .flatMap(v -> publisher.publish(event))
+                    .flatMap(v -> publishIO)
                     .flatMap(v -> telemetry.recordSuccess("fulfillable", fulfillmentId + ":dispatch"))
                     .flatMap(v -> telemetry.recordDuration("fulfillable", fulfillmentId, System.currentTimeMillis() - startTime))
                     .map(v -> Either.<String, FulfillmentLedger>right(ledger));
@@ -252,30 +211,18 @@ public final class FulfillmentProcess {
                 }
 
                 FulfillmentLedger ledger = optLedger.get();
-                if (ledger.status() != FulfillmentLedger.Status.DISPATCHED) {
-                    return IO.of(Either.<String, FulfillmentLedger>left("Cannot complete delivery in current status: " + ledger.status()));
+
+                // Delegate execution directly to rich aggregate!
+                Either<String, FulfillmentEvent> eitherEvent = ledger.complete(actorId, comment, request, now);
+                if (eitherEvent.isLeft()) {
+                    return IO.of(Either.<String, FulfillmentLedger>left(eitherEvent.getLeft()));
                 }
 
-                // Invoke pure domain double dispatch validation synchronously
-                Either<String, Void> eitherValid = request.evaluateCompletion(ledger, now);
-                if (eitherValid.isLeft()) {
-                    return IO.of(Either.<String, FulfillmentLedger>left(eitherValid.getLeft()));
-                }
-
-                FulfillmentStep step = new FulfillmentStep(
-                    UUID.randomUUID().toString(),
-                    actorId,
-                    FulfillmentStep.Type.COMPLETE,
-                    ledger.packagedQuantity(),
-                    comment,
-                    now
-                );
-                ledger.recordStep(step, FulfillmentLedger.Status.COMPLETED, 0, 0);
-
-                FulfillmentEvent event = new FulfillmentCompleted(fulfillmentId, now);
+                FulfillmentEvent event = eitherEvent.getRight();
+                IO<Void> publishIO = event != null ? publisher.publish(event) : IO.of(null);
 
                 return repository.save(fulfillmentId, ledger)
-                    .flatMap(v -> publisher.publish(event))
+                    .flatMap(v -> publishIO)
                     .flatMap(v -> telemetry.recordSuccess("fulfillable", fulfillmentId + ":complete"))
                     .flatMap(v -> telemetry.recordDuration("fulfillable", fulfillmentId, System.currentTimeMillis() - startTime))
                     .map(v -> Either.<String, FulfillmentLedger>right(ledger));
@@ -305,39 +252,18 @@ public final class FulfillmentProcess {
                 }
 
                 FulfillmentLedger ledger = optLedger.get();
-                if (ledger.status() != FulfillmentLedger.Status.ALLOCATING && ledger.status() != FulfillmentLedger.Status.PACKAGING) {
-                    return IO.of(Either.<String, FulfillmentLedger>left("Cannot release in current status: " + ledger.status()));
+
+                // Delegate execution directly to rich aggregate!
+                Either<String, FulfillmentEvent> eitherEvent = ledger.release(actorId, quantity, comment, request, now);
+                if (eitherEvent.isLeft()) {
+                    return IO.of(Either.<String, FulfillmentLedger>left(eitherEvent.getLeft()));
                 }
 
-                // Invoke pure domain double dispatch validation synchronously
-                Either<String, Void> eitherValid = request.evaluateRelease(ledger, quantity, now);
-                if (eitherValid.isLeft()) {
-                    return IO.of(Either.<String, FulfillmentLedger>left(eitherValid.getLeft()));
-                }
-
-                FulfillmentStep step = new FulfillmentStep(
-                    UUID.randomUUID().toString(),
-                    actorId,
-                    FulfillmentStep.Type.RELEASE,
-                    quantity,
-                    comment,
-                    now
-                );
-
-                // Deduct both allocated and packaged quantities as appropriate
-                int allocDeduct = Math.min(quantity, ledger.allocatedQuantity());
-                int packDeduct = Math.min(quantity, ledger.packagedQuantity());
-
-                FulfillmentLedger.Status nextStatus = (ledger.allocatedQuantity() - allocDeduct) == 0 
-                    ? FulfillmentLedger.Status.INITIAL 
-                    : ledger.status();
-
-                ledger.recordStep(step, nextStatus, -allocDeduct, -packDeduct);
-
-                FulfillmentEvent event = new FulfillmentReleased(fulfillmentId, quantity, now);
+                FulfillmentEvent event = eitherEvent.getRight();
+                IO<Void> publishIO = event != null ? publisher.publish(event) : IO.of(null);
 
                 return repository.save(fulfillmentId, ledger)
-                    .flatMap(v -> publisher.publish(event))
+                    .flatMap(v -> publishIO)
                     .flatMap(v -> telemetry.recordSuccess("fulfillable", fulfillmentId + ":release"))
                     .flatMap(v -> telemetry.recordDuration("fulfillable", fulfillmentId, System.currentTimeMillis() - startTime))
                     .map(v -> Either.<String, FulfillmentLedger>right(ledger));
