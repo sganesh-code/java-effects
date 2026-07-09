@@ -1,68 +1,234 @@
-# Implementation Plan: RECIPE-002 - Configure Ports & Adapters for ReservationProcess
+# Implementation Plan: Double-Dispatch Recipes Refactoring
+**Target Repository:** `java-effects`
+**Reference Design:** `@java-effects/docs/oo_object_recipe_research_notes.md`
 
-- [x] **🎟️ RECIPE-002: Configure Ports and Adapters to Inject Infrastructure at Runtime**
+The following tickets break down the comprehensive refactoring of the `java-effects` recipes catalog (`Payable`, `Fulfillable`, `Reservable`, `Ownable`, `Schedulable`, and `Approvable`). The goal of this refactoring is to remove all assumptions of model representation (such as representing money as primitive `double` amount and `String` currency, or capacity as `int` quantity) and instead use the **double-dispatch pattern** so that recipes only coordinate verbs and object collaboration while the consumer retains complete freedom to provide their own records, DTOs, and behavioral objects.
+
+---
+
+- [x] **🎟️ [TICKET-001]: Generalize `Payable` Recipe to Support Arbitrary Monetary Models**
   - **Description:** 
-    Currently, the `ReservationProcess` manages state (holds, resources, ledgers, and mappings) in-memory using concurrent maps. To allow plugging in database-backed state management, event-driven orchestration (e.g. Kafka or outbox publishing), and telemetry/logging systems at runtime, we must refactor `ReservationProcess` to separate the core recipe collaboration process from its infrastructure. In accordance with the project's design philosophy (`@java-effects/docs/oo_object_recipe_research_notes.md`), we will introduce a clean Ports & Adapters (Hexagonal) architecture. We will define generic interfaces (Ports) representing side-effecting operations and provide robust, fully backwards-compatible in-memory Adapters so that all existing tests and behaviors continue to function seamlessly.
+    Refactor the `Payable` recipe to remove primitive double-based amounts and string-based currency assumptions. We will parameterize the entire collaboration suite with generic types `<ID, M>`, where `ID` represents the payment identifier type and `M` represents the consumer's arbitrary monetary or transition detail model (e.g., a custom `Money` record with custom currency validation and arithmetic).
   - **Scope:**
     - **In scope:**
-      - **Ports (Generic Interfaces):** Define functional/object contracts for state storage, event publishing, and telemetry tracking, all returning lazy monadic `IO` results.
-      - **Events:** Define immutable event records representing lifecycle facts of the reservation recipe (HoldCreated, HoldRejected, HoldConfirmed, HoldReleased, HoldExpired).
-      - **In-Memory Adapters:** Standard implementations of the defined Ports using thread-safe, in-memory structures to ensure local testing and defaults continue to work.
-      - **Refactored `ReservationProcess`:** Update the coordinator to accept injected Ports at construction time, using functional monadic composition (flatMap/map) to sequence lazy effects instead of in-memory side effects inside `IO.delay`.
-      - **Expanded Test Coverage:** Add dedicated tests to verify that injected ports successfully capture states, events, and telemetry logs at runtime.
+      - Parameterizing the interfaces, records, aggregates, events, and process manager in the `@java-effects/lib/src/main/java/io/effects/recipes/payable/` package with `<ID, M>`.
+      - Removing `authorizedAmount`, `capturedAmount`, `refundedAmount`, and `currency` fields from `PaymentLedger`, tracking state solely via generic `Status` transitions and `PaymentStep<M>` chronological history.
+      - Refactoring `PayableRequest` evaluations to accept and pass generic `M` models, delegating all math and currency validations to the consumer's implementation via double-dispatch.
     - **Out of scope:**
-      - Changing the synchronous, pure, and stateless nature of domain objects (`ReservableResource`, `ResourceLedger`, `Hold`, `Reservation`).
-      - Writing actual production SQL DB/Kafka/OpenTelemetry adapters (only the architectural Ports and in-memory/logging Adapters are in scope).
+      - Modifying stable monadic foundations (`IO.java` or `Either.java`).
   - **Implementation Tasks:**
-    - [x] **Investigate:** Review existing code in `@java-effects/lib/src/main/java/io/effects/recipes/reservable/ReservationProcess.java` and design principles in `@java-effects/docs/oo_object_recipe_research_notes.md` (specifically Section 5, 6.3, 8.10, and 11) for mapping FP effects to OO capabilities.
-      - *Analyzed ReservationProcess in-memory storage structure and cross-referenced Sections 5, 6.3, 8.10, and 11 of the research notes on separation of effects via capability objects (ports).*
-    - [x] **Implement Ports:** Define the Port interfaces under `@java-effects/lib/src/main/java/io/effects/recipes/reservable/`:
-      - `StateRepository.java`: Defines methods to store/retrieve resource ledgers, holds, and mappings, returning monadic `IO` values:
-        - `IO<Void> saveLedger(String resourceId, ResourceLedger ledger)`
-        - `IO<Optional<ResourceLedger>> findLedger(String resourceId)`
-        - `IO<Void> saveHold(Hold hold, String resourceId)`
-        - `IO<Optional<Hold>> findHold(String holdId)`
-        - `IO<Optional<String>> findResourceIdForHold(String holdId)`
-        - `IO<Void> removeHold(String holdId)`
-      - `EventPublisher.java`: Defines the contract for publishing domain lifecycle facts:
-        - `IO<Void> publish(ReservationEvent event)`
-      - `TelemetryPort.java`: Defines domain-specific tracking for latency and operations:
-        - `IO<Void> recordHoldDuration(String resourceId, long durationMs)`
-        - `IO<Void> recordHoldSuccess(String resourceId)`
-        - `IO<Void> recordHoldFailure(String resourceId, String reason)`
-        - `IO<Void> recordConfirmationSuccess(String resourceId)`
-        - `IO<Void> recordConfirmationFailure(String resourceId, String reason)`
-      - *Successfully created the StateRepository, EventPublisher, and TelemetryPort port interfaces with monadic lazy IO-wrapped side effects.*
-    - [x] **Implement Events:** Under `@java-effects/lib/src/main/java/io/effects/recipes/reservable/`:
-      - Create `ReservationEvent.java` as a shared interface or record base representing historical facts:
-        - `Instant occurredAt()`
-        - `String resourceId()`
-      - Create immutable records representing specific facts:
-        - `HoldCreated.java` (fields: `holdId`, `resourceId`, `actorId`, `quantity`, `expiresAt`, `occurredAt`)
-        - `HoldRejected.java` (fields: `resourceId`, `actorId`, `quantity`, `reason`, `occurredAt`)
-        - `HoldConfirmed.java` (fields: `holdId`, `reservationId`, `resourceId`, `actorId`, `quantity`, `occurredAt`)
-        - `HoldReleased.java` (fields: `holdId`, `resourceId`, `occurredAt`)
-        - `HoldExpired.java` (fields: `holdId`, `resourceId`, `occurredAt`)
-      - *Implemented immutable ReservationEvent interface and concrete event records using native Java records (naturally getter/setter free).*
-    - [x] **Implement Default Adapters:** Under `@java-effects/lib/src/main/java/io/effects/recipes/reservable/`:
-      - `InMemoryStateRepository.java`: Encapsulates the current concurrent maps for holds and ledgers.
-      - `InMemoryEventPublisher.java`: Keeps an append-only list of published events (excellent for asserting assertions in testing).
-      - `NoOpTelemetryPort.java`: Empty implementations returning `IO.pure(null)`.
-      - `LoggingTelemetryPort.java`: Telemetry tracker printing metrics and duration logs using standard stdout logging (highly useful for local validation).
-      - *Created standard, thread-safe in-memory and stdout-logging adapters for all ports.*
-    - [x] **Refactor Coordinator:** Update `@java-effects/lib/src/main/java/io/effects/recipes/reservable/ReservationProcess.java`:
-      - Expose a constructor allowing injection of `StateRepository`, `EventPublisher`, and `TelemetryPort`.
-      - Expose a default zero-argument constructor that chains to the injected one using the `InMemoryStateRepository`, `InMemoryEventPublisher`, and `NoOpTelemetryPort` to maintain 100% backward compatibility.
-      - Refactor `add`, `hold`, `confirm`, `release`, and `expire` to fetch and store state, publish events, and measure durations entirely using monadic sequencing (`flatMap` and `map` on `IO`), ensuring no raw in-memory side effects are done outside of the lazy monad pipelines.
-      - *Refactored ReservationProcess coordinator to be fully dependency injected and composed functionally via lazy monadic operations.*
-    - [x] **Test:** Update `@java-effects/lib/src/test/java/io/effects/recipes/reservable/ReservationRecipeTest.java`:
-      - Ensure all existing tests pass unchanged with the refactored default `ReservationProcess`.
-      - Add a new comprehensive integration test case verifying dependency injection at runtime:
-        - Mock or use the `InMemoryEventPublisher` and `InMemoryStateRepository` directly.
-        - Assert that when `hold` and `confirm` are invoked:
-          1. The state is correctly persisted to the `StateRepository` (not a local map).
-          2. Appropriate `HoldCreated` and `HoldConfirmed` events are published to the `EventPublisher`.
-          3. Succeeded metric events are recorded via the `TelemetryPort`.
-      - *Added a new integration test validating that injecting custom state repositories, event publishers, and telemetry ports at runtime functions flawlessly and correctly captures domain events and performance metrics.*
-    - [x] **Verify:** Run standard Gradle tests `./gradlew test` to ensure both backwards compatibility and new ports/adapters integration compile cleanly and pass successfully.
-      - *Executed ./gradlew test and confirmed all existing and new ports and adapters tests pass successfully.*
+    - [x] Update `@java-effects/lib/src/main/java/io/effects/recipes/payable/PaymentStep.java` to:
+      - *Added generic type parameter `<M>` and replaced the primitive `double amount` with `M detail`.*
+      - Add type parameter `<M>`.
+      - Replace `double amount` with `M detail`.
+    - [x] Update `@java-effects/lib/src/main/java/io/effects/recipes/payable/PaymentEvent.java` and its implementations (`PaymentAuthorized`, `PaymentCaptured`, `PaymentRefunded`, `PaymentReversed`):
+      - *Refactored `PaymentEvent` and all implementing records (`PaymentAuthorized`, `PaymentCaptured`, `PaymentRefunded`, `PaymentReversed`) to be generic `<ID, M>`, removing primitive properties and supporting dynamic models.*
+      - Add type parameters `<ID, M>`.
+      - Store generic `ID paymentId` and `M detail` instead of primitive `double` and `String`.
+    - [x] Update `@java-effects/lib/src/main/java/io/effects/recipes/payable/PayableRequest.java` to:
+      - *Refactored the `PayableRequest` interface to be parameterized with `<ID, M>`, updating all signatures to accept and evaluate generic models `M` and ledger contexts.*
+      - Add type parameters `<ID, M>`.
+      - Refactor signatures to:
+        - `Either<String, Void> evaluateAuthorization(PaymentLedger<ID, M> ledger, M detail, Instant now);`
+        - `Either<String, Void> evaluateCapture(PaymentLedger<ID, M> ledger, M detail, Instant now);`
+        - `Either<String, Void> evaluateReversal(PaymentLedger<ID, M> ledger, Instant now);`
+        - `Either<String, Void> evaluateRefund(PaymentLedger<ID, M> ledger, M detail, Instant now);`
+    - [x] Update `@java-effects/lib/src/main/java/io/effects/recipes/payable/PaymentLedger.java` to:
+      - *Refactored `PaymentLedger` to be completely parameterized by `<ID, M>`. Removed primitive `authorizedAmount`, `capturedAmount`, `refundedAmount`, and `currency` properties. Delegate all validations to `PayableRequest` with double-dispatch.*
+      - Add type parameters `<ID, M>`.
+      - Remove double/string state fields (`authorizedAmount`, `capturedAmount`, `refundedAmount`, `currency`).
+      - Maintain `ID paymentId`, `Status status`, and `List<PaymentStep<M>> history`.
+      - Delegate all amount/refund constraint checks to `PayableRequest<ID, M>` using the ledger's history via double-dispatch.
+    - [x] Update `@java-effects/lib/src/main/java/io/effects/recipes/payable/PayableProcess.java` to:
+      - *Refactored `PayableProcess` to be parameterized by `<ID, M>`, ensuring that all internal ports use parameterized repositories and publishers, and methods are dynamically routed.*
+      - Add type parameters `<ID, M>`.
+      - Configure internal ports to use generic `StateRepository<ID, PaymentLedger<ID, M>>` and `EventPublisher<PaymentEvent<ID, M>>`.
+      - Update public monadic methods (`authorize`, `capture`, `reverse`, `refund`) to accept generic `M` and route calls to the ledger and request.
+
+- [ ] **🎟️ [TICKET-002]: Generalize `Fulfillable` Recipe to Support Custom Item/Quantity Models**
+  - **Description:** 
+    Refactor the `Fulfillable` recipe to remove primitive `int quantity` assumptions. We will parameterize the entire package with generic types `<ID, Q>`, where `ID` is the fulfillment identifier type and `Q` is the consumer-defined item/quantity detail model (e.g., a multi-item line mapping, complex weight measurements, or serial-number allocations).
+  - **Scope:**
+    - **In scope:**
+      - Refactoring all classes in the `@java-effects/lib/src/main/java/io/effects/recipes/fulfillable/` package.
+      - Removing internal fields tracking primitive allocated/packaged quantities from `FulfillmentLedger`, delegating total quantity checks and arithmetic checks to the consumer's request implementation via double-dispatch.
+    - **Out of scope:**
+      - Non-fulfillment workflows.
+  - **Implementation Tasks:**
+    - [ ] Update `@java-effects/lib/src/main/java/io/effects/recipes/fulfillable/FulfillmentStep.java` to:
+      - Add type parameter `<Q>`.
+      - Replace `int quantity` with `Q detail`.
+    - [ ] Update `@java-effects/lib/src/main/java/io/effects/recipes/fulfillable/FulfillmentEvent.java` and its sub-classes (`FulfillmentAllocated`, `FulfillmentDispatched`, `FulfillmentCompleted`, `FulfillmentReleased`):
+      - Add type parameters `<ID, Q>`.
+      - Store generic `ID fulfillmentId` and `Q detail` instead of primitive types.
+    - [ ] Update `@java-effects/lib/src/main/java/io/effects/recipes/fulfillable/FulfillableRequest.java` to:
+      - Add type parameters `<ID, Q>`.
+      - Refactor signatures to use generic `Q detail` instead of `int quantity`, passing `FulfillmentLedger<ID, Q>` to validation methods.
+    - [ ] Update `@java-effects/lib/src/main/java/io/effects/recipes/fulfillable/FulfillmentLedger.java` to:
+      - Add type parameters `<ID, Q>`.
+      - Remove `totalQuantity`, `allocatedQuantity`, and `packagedQuantity` primitive properties.
+      - Track only `ID fulfillmentId`, `Status status`, and `List<FulfillmentStep<Q>> history`.
+      - Provide getter methods for history, delegating all quantity verification to the `FulfillableRequest` via double-dispatch.
+    - [ ] Update `@java-effects/lib/src/main/java/io/effects/recipes/fulfillable/FulfillmentProcess.java` to:
+      - Add type parameters `<ID, Q>`.
+      - Update signatures of `allocate`, `package`, `dispatch`, `complete`, and `release` to use `Q` details and propagate calls to the updated repository and ledger.
+
+- [ ] **🎟️ [TICKET-003]: Generalize `Reservable` Recipe to Support Custom Capacity Models**
+  - **Description:** 
+    Refactor the `Reservable` recipe to remove primitive `int quantity` assumptions. We will parameterize the entire package with generic types `<ID, Q>`, where `ID` represents the resource/hold/reservation identifier and `Q` is the consumer-defined capacity model (e.g., custom seat zones, booking blocks, or calendar intervals).
+  - **Scope:**
+    - **In scope:**
+      - Refactoring all files in the `@java-effects/lib/src/main/java/io/effects/recipes/reservable/` package.
+      - Removing internal fields tracking primitive capacity bounds (like `totalCapacity` and integer arithmetic in `ResourceLedger`).
+      - Updating double-dispatch verification callbacks (`recordHold` and `recordConfirmation` policies) to accept the list of active holds and reservations, allowing the consumer to calculate capacity availability.
+    - **Out of scope:**
+      - Persistent thread scheduling (strictly focus on capacity bookkeeping).
+  - **Implementation Tasks:**
+    - [ ] Update `@java-effects/lib/src/main/java/io/effects/recipes/reservable/Hold.java` to:
+      - Add type parameters `<ID, Q>`.
+      - Replace `String resourceId` with `ID resourceId` and `int quantity` with `Q quantity`.
+    - [ ] Update `@java-effects/lib/src/main/java/io/effects/recipes/reservable/Reservation.java` to:
+      - Add type parameters `<ID, Q>`.
+      - Replace identifiers and quantities with generic types `<ID, Q>`.
+    - [ ] Update `@java-effects/lib/src/main/java/io/effects/recipes/reservable/ReservableResource.java` to:
+      - Add type parameters `<ID, Q>`.
+      - Update `tryHold` and `tryConfirm` method signatures to accept generic `Q quantity` and the parameterized `ResourceLedger<ID, Q>`.
+    - [ ] Update `@java-effects/lib/src/main/java/io/effects/recipes/reservable/ResourceLedger.java` to:
+      - Add type parameters `<ID, Q>`.
+      - Remove `int totalCapacity` field.
+      - Store holds/reservations in generic collections: `ConcurrentMap<String, Hold<ID, Q>>` and `ConcurrentMap<String, Reservation<ID, Q>>`.
+      - Update `recordHold` to take a business policy of type `BiFunction<List<Hold<ID, Q>>, List<Reservation<ID, Q>>, Optional<String>>`.
+      - Update `recordConfirmation` to take a policy of type `BiFunction<List<Reservation<ID, Q>>, Hold<ID, Q>, Optional<String>>`.
+    - [ ] Update `@java-effects/lib/src/main/java/io/effects/recipes/reservable/ReservationProcess.java` to:
+      - Add type parameters `<ID, Q>`.
+      - Update persistence, event publication, and process orchestration pipelines to propagate the parameterized `Hold<ID, Q>` and `Reservation<ID, Q>` objects.
+
+- [ ] **🎟️ [TICKET-004]: Generalize `Ownable` Recipe to Support Custom Owner Contexts**
+  - **Description:** 
+    Refactor the `Ownable` recipe to remove raw `String ownerId` and `String actorId` assumptions. We will parameterize the entire package with generic types `<ID, O>`, where `ID` represents the asset identifier type and `O` represents the consumer's custom owner context model (e.g., a multi-tenant corporate hierarchy, user group, or cryptographic signature principal).
+  - **Scope:**
+    - **In scope:**
+      - Refactoring all files in the `@java-effects/lib/src/main/java/io/effects/recipes/ownable/` package.
+      - Replacing string-based identifiers with generic owner representation `O` across `OwnableRequest`, `OwnershipRecord`, `OwnershipStep`, and `OwnableProcess`.
+    - **Out of scope:**
+      - Authentication and directory server lookups.
+  - **Implementation Tasks:**
+    - [ ] Update `@java-effects/lib/src/main/java/io/effects/recipes/ownable/OwnershipStep.java` to:
+      - Add type parameter `<O>`.
+      - Replace `String ownerId` with `O owner`.
+    - [ ] Update `@java-effects/lib/src/main/java/io/effects/recipes/ownable/OwnershipEvent.java` and its sub-classes (`OwnershipAssigned`, `OwnershipTransferred`, `OwnershipRevoked`):
+      - Add type parameters `<ID, O>`.
+      - Store generic `ID assetId` and `O owner` instead of strings.
+    - [ ] Update `@java-effects/lib/src/main/java/io/effects/recipes/ownable/OwnableRequest.java` to:
+      - Add type parameters `<ID, O>`.
+      - Refactor signatures to:
+        - `Either<String, Void> evaluateInitialAssignment(O owner, Instant now);`
+        - `Either<String, Void> evaluateTransfer(OwnershipRecord<ID, O> record, O currentOwner, O proposedOwner, O actor, Instant now);`
+    - [ ] Update `@java-effects/lib/src/main/java/io/effects/recipes/ownable/OwnershipRecord.java` to:
+      - Add type parameters `<ID, O>`.
+      - Replace `String assetId` with `ID assetId` and `String currentOwnerId` with `O currentOwner`.
+      - Use `List<OwnershipStep<O>> history`.
+      - Delegate all validation to `OwnableRequest<ID, O>` passing `this` ledger context via double-dispatch.
+    - [ ] Update `@java-effects/lib/src/main/java/io/effects/recipes/ownable/OwnableProcess.java` to:
+      - Add type parameters `<ID, O>`.
+      - Map state management, events publishing, and telemetry ports to handle `<ID, O>` types.
+
+- [ ] **🎟️ [TICKET-005]: Generalize `Schedulable` Recipe to Support Custom Trigger Specifications**
+  - **Description:** 
+    Refactor the `Schedulable` recipe to remove hardcoded `Instant triggerTime` scheduling assumptions. We will parameterize the entire package with generic types `<ID, T>`, where `ID` represents the scheduled occurrence identifier and `T` is the consumer's custom schedule specification model (e.g., cron strings, calendar periods, or event-driven triggers).
+  - **Scope:**
+    - **In scope:**
+      - Refactoring all files in the `@java-effects/lib/src/main/java/io/effects/recipes/schedulable/` package.
+      - Parameterizing the schedule specification representation, enabling consumers to define calendar-based dates or complex cron rules.
+    - **Out of scope:**
+      - Integrating with Quartz Scheduler or external cron engines.
+  - **Implementation Tasks:**
+    - [ ] Update `@java-effects/lib/src/main/java/io/effects/recipes/schedulable/ScheduleStep.java` to:
+      - Add type parameter `<T>`.
+      - Replace `Instant triggerTime` with `T detail`.
+    - [ ] Update `@java-effects/lib/src/main/java/io/effects/recipes/schedulable/SchedulableEvent.java` and its subclasses (`OccurrenceScheduled`, `OccurrenceRescheduled`, `OccurrenceFired`, `OccurrenceCancelled`):
+      - Add type parameters `<ID, T>`.
+      - Store generic `ID occurrenceId` and `T detail`.
+    - [ ] Update `@java-effects/lib/src/main/java/io/effects/recipes/schedulable/SchedulableRequest.java` to:
+      - Add type parameters `<ID, T>`.
+      - Refactor signatures to use generic `T` trigger details and receive `ScheduleLedger<ID, T>` to enable clean double-dispatch.
+    - [ ] Update `@java-effects/lib/src/main/java/io/effects/recipes/schedulable/ScheduleLedger.java` to:
+      - Add type parameters `<ID, T>`.
+      - Track only `ID occurrenceId`, `Status status`, `T triggerTime`, and `List<ScheduleStep<T>> history`.
+      - Delegate all temporal validations to the `SchedulableRequest` via double-dispatch.
+    - [ ] Update `@java-effects/lib/src/main/java/io/effects/recipes/schedulable/SchedulableProcess.java` to:
+      - Add type parameters `<ID, T>`.
+      - Propagate `T` specifications across the public API and database state lookups.
+
+- [ ] **🎟️ [TICKET-006]: Generalize `Approvable` Recipe to Support Custom Authority and Detail Models**
+  - **Description:** 
+    Refactor the `Approvable` recipe to remove primitive `String requiredAuthority` and string-based comment assumptions. We will parameterize the entire package with generic types `<ID, A, C>`, where `ID` represents the request identifier, `A` represents the consumer's custom authority level context (e.g., a cryptographic clearance level, dynamic role entity, or security group), and `C` represents the decision details or comments container (e.g., custom payload records containing digital signatures, reasons, or form attachments).
+  - **Scope:**
+    - **In scope:**
+      - Refactoring all files in the `@java-effects/lib/src/main/java/io/effects/recipes/approvable/` package.
+      - Removing string constraints on required authority, approver, and comments.
+      - Generalizing `InitialAssessment` and `NextStep` to return generic authority types `<A>`.
+    - **Out of scope:**
+      - User directory integrations or active security validations (which should be provided by the consumer's request).
+  - **Implementation Tasks:**
+    - [ ] Update `@java-effects/lib/src/main/java/io/effects/recipes/approvable/InitialAssessment.java` to:
+      - Add type parameter `<A>`.
+      - Store `A requiredAuthority` instead of `String`.
+    - [ ] Update `@java-effects/lib/src/main/java/io/effects/recipes/approvable/NextStep.java` to:
+      - Add type parameter `<A>`.
+      - Store `A nextRequiredAuthority` instead of `String`.
+    - [ ] Update `@java-effects/lib/src/main/java/io/effects/recipes/approvable/ApprovalDecision.java` to:
+      - Add type parameters `<A, C>`.
+      - Store `String approverId`, `A approverRole`, and `C detail` instead of simple strings.
+    - [ ] Update `@java-effects/lib/src/main/java/io/effects/recipes/approvable/ApprovalEvent.java` and its subclasses (`RequestSubmitted`, `RequestApproved`, `RequestRejected`, `RequestEscalated`):
+      - Add type parameters `<ID, A>`.
+      - Store generic types.
+    - [ ] Update `@java-effects/lib/src/main/java/io/effects/recipes/approvable/ApprovableRequest.java` to:
+      - Add type parameters `<ID, A, C>`.
+      - Refactor signatures:
+        - `InitialAssessment<A> evaluateInitialSubmission(Instant now);`
+        - `Either<String, NextStep<A>> evaluateDecision(ApprovalRecord<ID, A, C> record, String approverId, A approverRole, DecisionType decisionType, C detail, Instant now);`
+    - [ ] Update `@java-effects/lib/src/main/java/io/effects/recipes/approvable/ApprovalRecord.java` to:
+      - Add type parameters `<ID, A, C>`.
+      - Replace `String requestId` with `ID requestId` and track `A requiredAuthority` with generic type.
+      - Store `List<ApprovalDecision<A, C>> history`.
+      - Delegate all validation to `ApprovableRequest` using double-dispatch.
+    - [ ] Update `@java-effects/lib/src/main/java/io/effects/recipes/approvable/ApprovalProcess.java` to:
+      - Add type parameters `<ID, A, C>`.
+      - Map orchestration logic and repositories to use these parameterized types.
+
+- [ ] **🎟️ [TICKET-007]: Refactor Unit Tests and Define Custom Domain Models to Verify Decoupling**
+  - **Description:** 
+    Update the entire test suite in `@java-effects/lib/src/test/java/io/effects/recipes/` to conform to the new generic double-dispatch patterns. To rigorously prove the complete decoupling of the recipes from domain details, the test files must define their own custom records and classes for money (e.g., a `Money` record with `BigDecimal` and custom currency validation for payments), quantities, owners, triggers, and clearances, rather than using primitives.
+  - **Scope:**
+    - **In scope:**
+      - Refactoring the following test classes:
+        - `PayableRecipeTest.java` (defining a custom `Money` record with custom math).
+        - `FulfillmentRecipeTest.java` (defining a custom `ItemQuantity` model).
+        - `ReservationRecipeTest.java` (updating `AppointmentSlot` and `InventoryUnit` to use custom capacity structures).
+        - `OwnableRecipeTest.java` (defining a custom `OwnerPrincipal` class).
+        - `SchedulableRecipeTest.java` (defining custom scheduling expressions).
+        - `ApprovalRecipeTest.java` (updating `ExpenseReport` and `MedicalProcedureRequest` to use custom clearance level models and form decision details).
+      - Executing compilation and full test suite verification.
+    - **Out of scope:**
+      - Writing integration tests with database systems or active queue message brokers.
+  - **Implementation Tasks:**
+    - [ ] Refactor `@java-effects/lib/src/test/java/io/effects/recipes/payable/PayableRecipeTest.java`:
+      - Define a custom `Money` record in the test class.
+      - Implement a custom `PayableRequest` that uses this `Money` record to track authorized vs captured balances using historical steps via double-dispatch.
+    - [ ] Refactor `@java-effects/lib/src/test/java/io/effects/recipes/fulfillable/FulfillmentRecipeTest.java`:
+      - Define a custom item list and quantity details record.
+      - Implement a custom `FulfillableRequest` checking partial fulfillment progress using double-dispatch.
+    - [ ] Refactor `@java-effects/lib/src/test/java/io/effects/recipes/reservable/ReservationRecipeTest.java`:
+      - Update `@java-effects/lib/src/test/java/io/effects/recipes/reservable/healthcare/AppointmentSlot.java` and `@java-effects/lib/src/test/java/io/effects/recipes/reservable/ecommerce/InventoryUnit.java` to implement the new parameterized `ReservableResource`.
+      - Verify capacity allocations operate correctly on custom capacity types.
+    - [ ] Refactor `@java-effects/lib/src/test/java/io/effects/recipes/ownable/OwnableRecipeTest.java`:
+      - Define a custom `UserPrincipal` object.
+      - Verify assignment, validation, transfer, and revocation logic using this user principal context.
+    - [ ] Refactor `@java-effects/lib/src/test/java/io/effects/recipes/schedulable/SchedulableRecipeTest.java`:
+      - Define custom trigger objects.
+      - Assert correct scheduler status progressions and clock validations.
+    - [ ] Refactor `@java-effects/lib/src/test/java/io/effects/recipes/approvable/ApprovalRecipeTest.java` along with test implementations `@java-effects/lib/src/test/java/io/effects/recipes/approvable/ecommerce/ExpenseReport.java` and `@java-effects/lib/src/test/java/io/effects/recipes/approvable/healthcare/MedicalProcedureRequest.java`:
+      - Define dynamic authority clearances and decision payloads.
+      - Assert multi-step and multi-role rules execute seamlessly.
+    - [ ] Execute `./gradlew clean test` to ensure 100% test success and verify perfect compilation and type safety of the refactored code.

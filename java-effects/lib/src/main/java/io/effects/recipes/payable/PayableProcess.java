@@ -12,7 +12,6 @@ import io.effects.adapters.NoOpTelemetryPort;
 import io.effects.recipes.TransitionResult;
 import java.time.Instant;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
@@ -21,11 +20,11 @@ import java.util.concurrent.ConcurrentMap;
  * It coordinates monadic persistence lookup, domain aggregation, and event publishing,
  * completely decoupled from business logic invariants (which reside inside PaymentLedger).
  */
-public final class PayableProcess {
-    private final StateRepository<String, PaymentLedger> repository;
-    private final EventPublisher<PaymentEvent> publisher;
+public final class PayableProcess<ID, M> {
+    private final StateRepository<ID, PaymentLedger<ID, M>> repository;
+    private final EventPublisher<PaymentEvent<ID, M>> publisher;
     private final TelemetryPort telemetry;
-    private final ConcurrentMap<String, PayableRequest> payments = new ConcurrentHashMap<>();
+    private final ConcurrentMap<ID, PayableRequest<ID, M>> payments = new ConcurrentHashMap<>();
 
     /**
      * Default constructor uses the in-memory adapters for robust backward compatibility.
@@ -38,8 +37,8 @@ public final class PayableProcess {
      * Dependency injection constructor to configure custom ports/adapters at runtime.
      */
     public PayableProcess(
-        StateRepository<String, PaymentLedger> repository,
-        EventPublisher<PaymentEvent> publisher,
+        StateRepository<ID, PaymentLedger<ID, M>> repository,
+        EventPublisher<PaymentEvent<ID, M>> publisher,
         TelemetryPort telemetry
     ) {
         this.repository = Objects.requireNonNull(repository);
@@ -50,7 +49,7 @@ public final class PayableProcess {
     /**
      * Registers a behavioral payment request domain object.
      */
-    public IO<Void> register(String paymentId, PayableRequest payment) {
+    public IO<Void> register(ID paymentId, PayableRequest<ID, M> payment) {
         Objects.requireNonNull(paymentId);
         Objects.requireNonNull(payment);
         return IO.delay(() -> {
@@ -62,13 +61,13 @@ public final class PayableProcess {
     /**
      * Authorizes an initial payment amount.
      */
-    public IO<Either<String, PaymentLedger>> authorize(String paymentId, String actorId, double amount, String currency, Instant now) {
+    public IO<Either<String, PaymentLedger<ID, M>>> authorize(ID paymentId, String actorId, M detail, Instant now) {
         Objects.requireNonNull(paymentId);
         Objects.requireNonNull(actorId);
-        Objects.requireNonNull(currency);
+        Objects.requireNonNull(detail);
         Objects.requireNonNull(now);
 
-        PayableRequest payment = payments.get(paymentId);
+        PayableRequest<ID, M> payment = payments.get(paymentId);
         if (payment == null) {
             return IO.of(Either.left("Payment domain object not registered: " + paymentId));
         }
@@ -77,27 +76,27 @@ public final class PayableProcess {
             .bind(startTime -> repository.find(paymentId))
             .bind((startTime, optRecord) -> {
                 if (optRecord.isPresent() && optRecord.get().status() != PaymentLedger.Status.INITIAL) {
-                    return IO.of(Either.<String, PaymentLedger>left("Cannot authorize: payment already initiated (current status: " + optRecord.get().status() + ")"));
+                    return IO.of(Either.<String, PaymentLedger<ID, M>>left("Cannot authorize: payment already initiated (current status: " + optRecord.get().status() + ")"));
                 }
 
                 // Delegate creation and transition to rich aggregate factory
-                Either<String, TransitionResult<PaymentLedger, PaymentEvent>> authResult = PaymentLedger.authorize(
-                    paymentId, actorId, amount, currency, payment, now
+                Either<String, TransitionResult<PaymentLedger<ID, M>, PaymentEvent<ID, M>>> authResult = PaymentLedger.authorize(
+                    paymentId, actorId, detail, payment, now
                 );
 
                 if (authResult.isLeft()) {
-                    return IO.of(Either.<String, PaymentLedger>left(authResult.getLeft()));
+                    return IO.of(Either.<String, PaymentLedger<ID, M>>left(authResult.getLeft()));
                 }
 
-                TransitionResult<PaymentLedger, PaymentEvent> result = authResult.getRight();
-                PaymentLedger ledger = result.aggregate();
-                PaymentEvent event = result.event();
+                TransitionResult<PaymentLedger<ID, M>, PaymentEvent<ID, M>> result = authResult.getRight();
+                PaymentLedger<ID, M> ledger = result.aggregate();
+                PaymentEvent<ID, M> event = result.event();
 
                 return repository.save(paymentId, ledger)
                     .flatMap(v -> publisher.publish(event))
-                    .flatMap(v -> telemetry.recordSuccess("payable", paymentId + ":authorize"))
-                    .flatMap(v -> telemetry.recordDuration("payable", paymentId, System.currentTimeMillis() - startTime))
-                    .map(v -> Either.<String, PaymentLedger>right(ledger));
+                    .flatMap(v -> telemetry.recordSuccess("payable", paymentId.toString() + ":authorize"))
+                    .flatMap(v -> telemetry.recordDuration("payable", paymentId.toString(), System.currentTimeMillis() - startTime))
+                    .map(v -> Either.<String, PaymentLedger<ID, M>>right(ledger));
             })
             .yield((startTime, optRecord, result) -> result);
     }
@@ -105,13 +104,13 @@ public final class PayableProcess {
     /**
      * Captures an authorized payment.
      */
-    public IO<Either<String, PaymentLedger>> capture(String paymentId, String actorId, double amount, String comment, Instant now) {
+    public IO<Either<String, PaymentLedger<ID, M>>> capture(ID paymentId, String actorId, M detail, String comment, Instant now) {
         Objects.requireNonNull(paymentId);
         Objects.requireNonNull(actorId);
         Objects.requireNonNull(comment);
         Objects.requireNonNull(now);
 
-        PayableRequest payment = payments.get(paymentId);
+        PayableRequest<ID, M> payment = payments.get(paymentId);
         if (payment == null) {
             return IO.of(Either.left("Payment domain object not registered: " + paymentId));
         }
@@ -120,25 +119,25 @@ public final class PayableProcess {
             .bind(startTime -> repository.find(paymentId))
             .bind((startTime, optRecord) -> {
                 if (optRecord.isEmpty()) {
-                    return IO.of(Either.<String, PaymentLedger>left("Payment ledger not found: " + paymentId));
+                    return IO.of(Either.<String, PaymentLedger<ID, M>>left("Payment ledger not found: " + paymentId));
                 }
 
-                PaymentLedger ledger = optRecord.get();
+                PaymentLedger<ID, M> ledger = optRecord.get();
 
                 // Delegate execution directly to rich aggregate!
-                Either<String, PaymentEvent> eitherEvent = ledger.capture(actorId, amount, comment, payment, now);
+                Either<String, PaymentEvent<ID, M>> eitherEvent = ledger.capture(actorId, detail, comment, payment, now);
                 if (eitherEvent.isLeft()) {
-                    return IO.of(Either.<String, PaymentLedger>left(eitherEvent.getLeft()));
+                    return IO.of(Either.<String, PaymentLedger<ID, M>>left(eitherEvent.getLeft()));
                 }
 
-                PaymentEvent event = eitherEvent.getRight();
+                PaymentEvent<ID, M> event = eitherEvent.getRight();
                 IO<Void> publishIO = event != null ? publisher.publish(event) : IO.of(null);
 
                 return repository.save(paymentId, ledger)
                     .flatMap(v -> publishIO)
-                    .flatMap(v -> telemetry.recordSuccess("payable", paymentId + ":capture"))
-                    .flatMap(v -> telemetry.recordDuration("payable", paymentId, System.currentTimeMillis() - startTime))
-                    .map(v -> Either.<String, PaymentLedger>right(ledger));
+                    .flatMap(v -> telemetry.recordSuccess("payable", paymentId.toString() + ":capture"))
+                    .flatMap(v -> telemetry.recordDuration("payable", paymentId.toString(), System.currentTimeMillis() - startTime))
+                    .map(v -> Either.<String, PaymentLedger<ID, M>>right(ledger));
             })
             .yield((startTime, optRecord, result) -> result);
     }
@@ -146,13 +145,13 @@ public final class PayableProcess {
     /**
      * Reverses/voids an active payment authorization.
      */
-    public IO<Either<String, PaymentLedger>> reverse(String paymentId, String actorId, String reason, Instant now) {
+    public IO<Either<String, PaymentLedger<ID, M>>> reverse(ID paymentId, String actorId, String reason, Instant now) {
         Objects.requireNonNull(paymentId);
         Objects.requireNonNull(actorId);
         Objects.requireNonNull(reason);
         Objects.requireNonNull(now);
 
-        PayableRequest payment = payments.get(paymentId);
+        PayableRequest<ID, M> payment = payments.get(paymentId);
         if (payment == null) {
             return IO.of(Either.left("Payment domain object not registered: " + paymentId));
         }
@@ -161,25 +160,25 @@ public final class PayableProcess {
             .bind(startTime -> repository.find(paymentId))
             .bind((startTime, optRecord) -> {
                 if (optRecord.isEmpty()) {
-                    return IO.of(Either.<String, PaymentLedger>left("Payment ledger not found: " + paymentId));
+                    return IO.of(Either.<String, PaymentLedger<ID, M>>left("Payment ledger not found: " + paymentId));
                 }
 
-                PaymentLedger ledger = optRecord.get();
+                PaymentLedger<ID, M> ledger = optRecord.get();
 
                 // Delegate execution directly to rich aggregate!
-                Either<String, PaymentEvent> eitherEvent = ledger.reverse(actorId, reason, payment, now);
+                Either<String, PaymentEvent<ID, M>> eitherEvent = ledger.reverse(actorId, reason, payment, now);
                 if (eitherEvent.isLeft()) {
-                    return IO.of(Either.<String, PaymentLedger>left(eitherEvent.getLeft()));
+                    return IO.of(Either.<String, PaymentLedger<ID, M>>left(eitherEvent.getLeft()));
                 }
 
-                PaymentEvent event = eitherEvent.getRight();
+                PaymentEvent<ID, M> event = eitherEvent.getRight();
                 IO<Void> publishIO = event != null ? publisher.publish(event) : IO.of(null);
 
                 return repository.save(paymentId, ledger)
                     .flatMap(v -> publishIO)
-                    .flatMap(v -> telemetry.recordSuccess("payable", paymentId + ":reverse"))
-                    .flatMap(v -> telemetry.recordDuration("payable", paymentId, System.currentTimeMillis() - startTime))
-                    .map(v -> Either.<String, PaymentLedger>right(ledger));
+                    .flatMap(v -> telemetry.recordSuccess("payable", paymentId.toString() + ":reverse"))
+                    .flatMap(v -> telemetry.recordDuration("payable", paymentId.toString(), System.currentTimeMillis() - startTime))
+                    .map(v -> Either.<String, PaymentLedger<ID, M>>right(ledger));
             })
             .yield((startTime, optRecord, result) -> result);
     }
@@ -187,13 +186,13 @@ public final class PayableProcess {
     /**
      * Refunds a captured payment.
      */
-    public IO<Either<String, PaymentLedger>> refund(String paymentId, String actorId, double amount, String reason, Instant now) {
+    public IO<Either<String, PaymentLedger<ID, M>>> refund(ID paymentId, String actorId, M detail, String reason, Instant now) {
         Objects.requireNonNull(paymentId);
         Objects.requireNonNull(actorId);
         Objects.requireNonNull(reason);
         Objects.requireNonNull(now);
 
-        PayableRequest payment = payments.get(paymentId);
+        PayableRequest<ID, M> payment = payments.get(paymentId);
         if (payment == null) {
             return IO.of(Either.left("Payment domain object not registered: " + paymentId));
         }
@@ -202,25 +201,25 @@ public final class PayableProcess {
             .bind(startTime -> repository.find(paymentId))
             .bind((startTime, optRecord) -> {
                 if (optRecord.isEmpty()) {
-                    return IO.of(Either.<String, PaymentLedger>left("Payment ledger not found: " + paymentId));
+                    return IO.of(Either.<String, PaymentLedger<ID, M>>left("Payment ledger not found: " + paymentId));
                 }
 
-                PaymentLedger ledger = optRecord.get();
+                PaymentLedger<ID, M> ledger = optRecord.get();
 
                 // Delegate execution directly to rich aggregate!
-                Either<String, PaymentEvent> eitherEvent = ledger.refund(actorId, amount, reason, payment, now);
+                Either<String, PaymentEvent<ID, M>> eitherEvent = ledger.refund(actorId, detail, reason, payment, now);
                 if (eitherEvent.isLeft()) {
-                    return IO.of(Either.<String, PaymentLedger>left(eitherEvent.getLeft()));
+                    return IO.of(Either.<String, PaymentLedger<ID, M>>left(eitherEvent.getLeft()));
                 }
 
-                PaymentEvent event = eitherEvent.getRight();
+                PaymentEvent<ID, M> event = eitherEvent.getRight();
                 IO<Void> publishIO = event != null ? publisher.publish(event) : IO.of(null);
 
                 return repository.save(paymentId, ledger)
                     .flatMap(v -> publishIO)
-                    .flatMap(v -> telemetry.recordSuccess("payable", paymentId + ":refund"))
-                    .flatMap(v -> telemetry.recordDuration("payable", paymentId, System.currentTimeMillis() - startTime))
-                    .map(v -> Either.<String, PaymentLedger>right(ledger));
+                    .flatMap(v -> telemetry.recordSuccess("payable", paymentId.toString() + ":refund"))
+                    .flatMap(v -> telemetry.recordDuration("payable", paymentId.toString(), System.currentTimeMillis() - startTime))
+                    .map(v -> Either.<String, PaymentLedger<ID, M>>right(ledger));
             })
             .yield((startTime, optRecord, result) -> result);
     }

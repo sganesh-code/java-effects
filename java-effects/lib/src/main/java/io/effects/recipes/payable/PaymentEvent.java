@@ -5,12 +5,12 @@ import java.time.Instant;
 /**
  * A historical domain fact representing a lifecycle event of the payment recipe.
  */
-public interface PaymentEvent {
+public interface PaymentEvent<ID, M> {
 
     /**
      * Unique identifier of the payment.
      */
-    String paymentId();
+    ID paymentId();
 
     /**
      * The timestamp of when the event occurred.

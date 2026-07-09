@@ -11,25 +11,25 @@ import java.time.Instant;
  * The monadic shell (PayableProcess) is responsible for lifting these pure synchronous
  * evaluations safely into the lazy, concurrent IO context.
  */
-public interface PayableRequest {
+public interface PayableRequest<ID, M> {
 
     /**
      * Behavioral Message: Evaluates whether an initial payment authorization is allowed.
      */
-    Either<String, Void> evaluateAuthorization(PaymentLedger ledger, double amount, String currency, Instant now);
+    Either<String, Void> evaluateAuthorization(PaymentLedger<ID, M> ledger, M detail, Instant now);
 
     /**
      * Behavioral Message: Evaluates a proposed capture against the ledger.
      */
-    Either<String, Void> evaluateCapture(PaymentLedger ledger, double amount, Instant now);
+    Either<String, Void> evaluateCapture(PaymentLedger<ID, M> ledger, M detail, Instant now);
 
     /**
      * Behavioral Message: Evaluates a proposed reversal of an authorization.
      */
-    Either<String, Void> evaluateReversal(PaymentLedger ledger, Instant now);
+    Either<String, Void> evaluateReversal(PaymentLedger<ID, M> ledger, Instant now);
 
     /**
      * Behavioral Message: Evaluates a proposed refund against the ledger.
      */
-    Either<String, Void> evaluateRefund(PaymentLedger ledger, double amount, Instant now);
+    Either<String, PaymentLedger.Status> evaluateRefund(PaymentLedger<ID, M> ledger, M detail, Instant now);
 }

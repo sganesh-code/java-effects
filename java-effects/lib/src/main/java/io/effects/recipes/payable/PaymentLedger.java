@@ -10,48 +10,33 @@ import java.util.Objects;
 import java.util.UUID;
 
 /**
- * A rich, non-anemic domain state ledger representing the current payment status,
- * authorized amount, captured amount, refunded amount, and chronological transaction steps.
+ * A rich, non-anemic domain state ledger representing the current payment status
+ * and chronological transaction steps.
  * It is an Aggregate Root that encapsulates all payment invariants and produces PaymentEvent occurrences.
  */
-public final class PaymentLedger {
+public final class PaymentLedger<ID, M> {
     public enum Status { INITIAL, AUTHORIZED, CAPTURED, REVERSED, REFUNDED, PARTIALLY_REFUNDED }
 
-    private final String paymentId;
+    private final ID paymentId;
     private Status status = Status.INITIAL;
-    private double authorizedAmount = 0.0;
-    private double capturedAmount = 0.0;
-    private double refundedAmount = 0.0;
-    private String currency;
-    private final List<PaymentStep> history = new ArrayList<>();
+    private final List<PaymentStep<M>> history = new ArrayList<>();
 
-    public PaymentLedger(String paymentId) {
+    public PaymentLedger(ID paymentId) {
         this.paymentId = Objects.requireNonNull(paymentId);
     }
 
-    public synchronized String paymentId() { return paymentId; }
+    public synchronized ID paymentId() { return paymentId; }
     public synchronized Status status() { return status; }
-    public synchronized double authorizedAmount() { return authorizedAmount; }
-    public synchronized double capturedAmount() { return capturedAmount; }
-    public synchronized double refundedAmount() { return refundedAmount; }
-    public synchronized String currency() { return currency; }
-    public synchronized List<PaymentStep> history() { return Collections.unmodifiableList(new ArrayList<>(history)); }
+    public synchronized List<PaymentStep<M>> history() { return Collections.unmodifiableList(new ArrayList<>(history)); }
 
     public synchronized boolean isTerminal() {
-        return status == Status.REVERSED || (status == Status.REFUNDED && refundedAmount == capturedAmount);
+        return status == Status.REVERSED || status == Status.REFUNDED;
     }
 
     /**
      * Records a payment flow step and transitions state internally.
      */
-    private synchronized void recordStep(
-        PaymentStep step, 
-        Status nextStatus, 
-        double authDiff, 
-        double captureDiff, 
-        double refundDiff, 
-        String currency
-    ) {
+    private synchronized void recordStep(PaymentStep<M> step, Status nextStatus) {
         Objects.requireNonNull(step);
         Objects.requireNonNull(nextStatus);
 
@@ -61,102 +46,96 @@ public final class PaymentLedger {
 
         this.history.add(step);
         this.status = nextStatus;
-        this.authorizedAmount += authDiff;
-        this.capturedAmount += captureDiff;
-        this.refundedAmount += refundDiff;
-        if (currency != null) {
-            this.currency = currency;
-        }
     }
 
     /**
      * Behavioral Factory: Evaluates, authorizes, and creates the PaymentLedger.
      */
-    public static Either<String, TransitionResult<PaymentLedger, PaymentEvent>> authorize(
-        String paymentId, 
+    public static <ID, M> Either<String, TransitionResult<PaymentLedger<ID, M>, PaymentEvent<ID, M>>> authorize(
+        ID paymentId, 
         String actorId, 
-        double amount, 
-        String currency, 
-        PayableRequest request, 
+        M detail, 
+        PayableRequest<ID, M> request, 
         Instant now
     ) {
         Objects.requireNonNull(paymentId);
         Objects.requireNonNull(actorId);
-        Objects.requireNonNull(currency);
+        Objects.requireNonNull(detail);
         Objects.requireNonNull(request);
         Objects.requireNonNull(now);
 
-        PaymentLedger ledger = new PaymentLedger(paymentId);
+        PaymentLedger<ID, M> ledger = new PaymentLedger<>(paymentId);
 
         // Domain validation (double dispatch)
-        Either<String, Void> eitherValid = request.evaluateAuthorization(ledger, amount, currency, now);
+        Either<String, Void> eitherValid = request.evaluateAuthorization(ledger, detail, now);
         if (eitherValid.isLeft()) {
             return Either.left(eitherValid.getLeft());
         }
 
-        PaymentStep step = new PaymentStep(
+        PaymentStep<M> step = new PaymentStep<>(
             UUID.randomUUID().toString(),
             actorId,
             PaymentStep.Type.AUTHORIZE,
-            amount,
+            detail,
             "Payment authorized",
             now
         );
-        ledger.recordStep(step, Status.AUTHORIZED, amount, 0.0, 0.0, currency);
+        ledger.recordStep(step, Status.AUTHORIZED);
 
-        PaymentEvent event = new PaymentAuthorized(paymentId, amount, currency, now);
+        PaymentEvent<ID, M> event = new PaymentAuthorized<>(paymentId, detail, now);
         return Either.right(new TransitionResult<>(ledger, event));
     }
 
     /**
      * Behavioral Transition: Evaluates and captures an authorized payment.
      */
-    public synchronized Either<String, PaymentEvent> capture(
+    public synchronized Either<String, PaymentEvent<ID, M>> capture(
         String actorId, 
-        double amount, 
+        M detail, 
         String comment, 
-        PayableRequest request, 
+        PayableRequest<ID, M> request, 
         Instant now
     ) {
         Objects.requireNonNull(actorId);
+        Objects.requireNonNull(detail);
         Objects.requireNonNull(comment);
         Objects.requireNonNull(request);
         Objects.requireNonNull(now);
 
-        if (status == Status.CAPTURED && authorizedAmount == 0.0) {
+        if (status == Status.CAPTURED) {
             return Either.right(null); // Idempotent success
         }
-        if (status != Status.AUTHORIZED && status != Status.CAPTURED) {
+        if (status != Status.AUTHORIZED) {
             return Either.left("Cannot capture payment in current status: " + status);
         }
 
         // Domain validation (double dispatch)
-        Either<String, Void> eitherValid = request.evaluateCapture(this, amount, now);
+        Either<String, Void> eitherValid = request.evaluateCapture(this, detail, now);
         if (eitherValid.isLeft()) {
             return Either.left(eitherValid.getLeft());
         }
 
-        PaymentStep step = new PaymentStep(
+        PaymentStep<M> step = new PaymentStep<>(
             UUID.randomUUID().toString(),
             actorId,
             PaymentStep.Type.CAPTURE,
-            amount,
+            detail,
             comment,
             now
         );
-        recordStep(step, Status.CAPTURED, -amount, amount, 0.0, null);
+        recordStep(step, Status.CAPTURED);
 
-        PaymentEvent event = new PaymentCaptured(paymentId, amount, now);
+        PaymentEvent<ID, M> event = new PaymentCaptured<>(paymentId, detail, now);
         return Either.right(event);
     }
 
     /**
      * Behavioral Transition: Reverses/voids an active payment authorization.
      */
-    public synchronized Either<String, PaymentEvent> reverse(
+    public synchronized Either<String, PaymentEvent<ID, M>> reverse(
         String actorId, 
         String reason, 
-        PayableRequest request, 
+        PayableRequest<ID, M> request, 
         Instant now
     ) {
         Objects.requireNonNull(actorId);
@@ -177,32 +156,38 @@ public final class PaymentLedger {
             return Either.left(eitherValid.getLeft());
         }
 
-        PaymentStep step = new PaymentStep(
+        M detail = history.stream()
+            .filter(s -> s.type() == PaymentStep.Type.AUTHORIZE)
+            .map(PaymentStep::detail)
+            .findFirst()
+            .orElse(null);
+
+        PaymentStep<M> step = new PaymentStep<>(
             UUID.randomUUID().toString(),
             actorId,
             PaymentStep.Type.REVERSE,
-            authorizedAmount,
+            detail,
             reason,
             now
         );
-        double originalAuth = authorizedAmount;
-        recordStep(step, Status.REVERSED, -originalAuth, 0.0, 0.0, null);
+        recordStep(step, Status.REVERSED);
 
-        PaymentEvent event = new PaymentReversed(paymentId, now);
+        PaymentEvent<ID, M> event = new PaymentReversed<>(paymentId, now);
         return Either.right(event);
     }
 
     /**
      * Behavioral Transition: Refunds a captured payment.
      */
-    public synchronized Either<String, PaymentEvent> refund(
+    public synchronized Either<String, PaymentEvent<ID, M>> refund(
         String actorId, 
-        double amount, 
+        M detail, 
         String reason, 
-        PayableRequest request, 
+        PayableRequest<ID, M> request, 
         Instant now
     ) {
         Objects.requireNonNull(actorId);
+        Objects.requireNonNull(detail);
         Objects.requireNonNull(reason);
         Objects.requireNonNull(request);
         Objects.requireNonNull(now);
@@ -212,26 +197,28 @@ public final class PaymentLedger {
         }
 
         // Domain validation
-        Either<String, Void> eitherValid = request.evaluateRefund(this, amount, now);
+        Either<String, Status> eitherValid = request.evaluateRefund(this, detail, now);
         if (eitherValid.isLeft()) {
             return Either.left(eitherValid.getLeft());
         }
 
-        PaymentStep step = new PaymentStep(
+        Status nextStatus = eitherValid.getRight();
+        if (nextStatus != Status.REFUNDED && nextStatus != Status.PARTIALLY_REFUNDED) {
+            return Either.left("Invalid refund transition status returned by evaluation: " + nextStatus);
+        }
+
+        PaymentStep<M> step = new PaymentStep<>(
             UUID.randomUUID().toString(),
             actorId,
             PaymentStep.Type.REFUND,
-            amount,
+            detail,
             reason,
             now
         );
 
-        double nextRefunded = refundedAmount + amount;
-        Status nextStatus = nextRefunded >= capturedAmount ? Status.REFUNDED : Status.PARTIALLY_REFUNDED;
+        recordStep(step, nextStatus);
 
-        recordStep(step, nextStatus, 0.0, 0.0, amount, null);
-
-        PaymentEvent event = new PaymentRefunded(paymentId, amount, now);
+        PaymentEvent<ID, M> event = new PaymentRefunded<>(paymentId, detail, now);
         return Either.right(event);
     }
 }
