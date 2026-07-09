@@ -1,10 +1,6 @@
 package io.effects.recipes.payable;
 
 import io.effects.Either;
-import io.effects.IO;
-import io.effects.ports.EventPublisher;
-import io.effects.ports.StateRepository;
-import io.effects.ports.TelemetryPort;
 import io.effects.adapters.InMemoryEventPublisher;
 import io.effects.adapters.InMemoryStateRepository;
 import io.effects.adapters.NoOpTelemetryPort;
@@ -19,12 +15,7 @@ class PayableRecipeTest {
 
     // A concrete, behavioral domain request representing a customer payment order.
     // Exposes NO getter APIs for identity or initiators, satisfying our pure OOP guidelines.
-    private static final class CustomerPayment implements PayableRequest {
-        private final double maxLimit;
-
-        CustomerPayment(double maxLimit) {
-            this.maxLimit = maxLimit;
-        }
+    private record CustomerPayment(double maxLimit) implements PayableRequest {
 
         @Override
         public Either<String, Void> evaluateAuthorization(PaymentLedger ledger, double amount, String currency, Instant now) {
@@ -149,9 +140,9 @@ class PayableRecipeTest {
         // Verify events
         List<PaymentEvent> events = publisher.getPublishedEvents();
         assertEquals(3, events.size()); // auth, capture 1, capture 2
-        assertTrue(events.get(0) instanceof PaymentAuthorized);
-        assertTrue(events.get(1) instanceof PaymentCaptured);
-        assertTrue(events.get(2) instanceof PaymentCaptured);
+        assertInstanceOf(PaymentAuthorized.class, events.get(0));
+        assertInstanceOf(PaymentCaptured.class, events.get(1));
+        assertInstanceOf(PaymentCaptured.class, events.get(2));
     }
 
     // 3. Reversal Terminal State Invariant
