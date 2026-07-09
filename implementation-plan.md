@@ -146,7 +146,7 @@ All of these recipes will strictly leverage our root-level, generalized ports an
       - Define a custom `ApiUsage` metric tick record and `BillInvoice` rated record.
       - Implement tests verifying continuous usage ticks, dynamic tier calculation (SaaS rates), cycle transitions, and post-billing finality locks.
 
-- [ ] **🎟️ [TICKET-004]: Implement the `Negotiable` Object Collaboration Recipe**
+- [x] **🎟️ [TICKET-004]: Implement the `Negotiable` Object Collaboration Recipe**
   - **Description:** 
     Implement the `Negotiable` recipe, representing a reusable, domain-agnostic protocol for multi-party bargaining, offer-matching, and counter-proposals.
     
@@ -168,21 +168,26 @@ All of these recipes will strictly leverage our root-level, generalized ports an
       - Secure email messaging systems or legal contract signature verification.
 
   - **Implementation Tasks:**
-    - [ ] Create `@java-effects/lib/src/main/java/io/effects/recipes/negotiable/NegotiationStep.java` containing:
+    - [x] Create `@java-effects/lib/src/main/java/io/effects/recipes/negotiable/NegotiationStep.java` containing:
+      - *Created NegotiationStep record parameterized by `<P>` and action types.*
       - Add type parameter `<P>`.
       - Store `P proposal`, `String stepId`, `String actorId`, `Type type`, and timestamp.
-    - [ ] Create `@java-effects/lib/src/main/java/io/effects/recipes/negotiable/NegotiableRequest.java` containing:
+    - [x] Create `@java-effects/lib/src/main/java/io/effects/recipes/negotiable/NegotiableRequest.java` containing:
+      - *Created NegotiableRequest pure behavioral interface with generic parameters `<ID, P>`, declaring evaluateOffer, evaluateCounter, and evaluateAcceptance signatures.*
       - Add type parameters `<ID, P>`.
       - Define behavioral messages:
         - `Either<String, Void> evaluateOffer(NegotiationLedger<ID, P> ledger, String actorId, P proposal, Instant now);`
         - `Either<String, Void> evaluateCounter(NegotiationLedger<ID, P> ledger, String actorId, P proposal, Instant now);`
         - `Either<String, Void> evaluateAcceptance(NegotiationLedger<ID, P> ledger, String actorId, Instant now);`
-    - [ ] Create `@java-effects/lib/src/main/java/io/effects/recipes/negotiable/NegotiationLedger.java` containing:
+    - [x] Create `@java-effects/lib/src/main/java/io/effects/recipes/negotiable/NegotiationLedger.java` containing:
+      - *Created NegotiationLedger aggregate root class with generic parameters `<ID, P>`, coordinating sequential turn-taking invariants and double-dispatch offer matching.*
       - Add type parameters `<ID, P>`.
       - Store `ID sessionId`, `Status status`, and `List<NegotiationStep<P>> history`.
       - Implement thread safety and turn validations, delegating domain checks to `NegotiableRequest`.
-    - [ ] Create `@java-effects/lib/src/main/java/io/effects/recipes/negotiable/NegotiableProcess.java` containing:
+    - [x] Create `@java-effects/lib/src/main/java/io/effects/recipes/negotiable/NegotiableProcess.java` containing:
+      - *Created NegotiableProcess and NegotiationEvent to handle generic session negotiations and events.*
       - Monadic pipelines executing in `IO` for `makeOffer()`, `makeCounter()`, `accept()`, and `withdraw()`.
-    - [ ] Create `@java-effects/lib/src/test/java/io/effects/recipes/negotiable/NegotiableRecipeTest.java` containing:
+    - [x] Create `@java-effects/lib/src/test/java/io/effects/recipes/negotiable/NegotiableRecipeTest.java` containing:
+      - *Created NegotiableRecipeTest defining custom ContractOffer proposals and verifying turn-taking, price band bounds, acceptance finalities, and withdrawals.*
       - Define a custom `ContractOffer` proposal record.
       - Implement tests asserting sequential turn invariants, price band enforcement, acceptance finalities, and withdrawal cancellations.
