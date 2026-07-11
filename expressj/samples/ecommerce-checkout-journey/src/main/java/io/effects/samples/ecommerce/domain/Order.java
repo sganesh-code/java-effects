@@ -1,5 +1,6 @@
 package io.effects.samples.ecommerce.domain;
 
+import io.effects.IO;
 import io.effects.ports.EventSubscriber;
 import io.effects.recipes.reservable.Hold;
 import io.effects.samples.ecommerce.domain.models.SLAContext;
@@ -16,18 +17,47 @@ public class Order {
     // Encapsulated states
     private Hold<String, Integer> stockHold;
     private final AssetRegistry assetRegistry;
+    private final EventSubscriber<Object> subscriberPort;
+    private final Warehouse warehouse;
 
-    public Order(String orderId, String itemId, String customerEmail, int quantity, double unitPrice, EventSubscriber<Object> subscriberPort) {
+    public Order(String orderId, String itemId, String customerEmail, int quantity, double unitPrice, EventSubscriber<Object> subscriberPort, Warehouse warehouse) {
         this.orderId = orderId;
         this.itemId = itemId;
         this.customerEmail = customerEmail;
         this.quantity = quantity;
         this.status = "CREATED";
+        this.subscriberPort = subscriberPort;
+        this.warehouse = warehouse;
         this.assetRegistry = new AssetRegistry(subscriberPort, customerEmail);
+        if (subscriberPort != null) {
+            subscribeToEvents();
+        }
+    }
+
+    public Order(String orderId, String itemId, String customerEmail, int quantity, double unitPrice, EventSubscriber<Object> subscriberPort) {
+        this(orderId, itemId, customerEmail, quantity, unitPrice, subscriberPort, null);
     }
 
     public Order(String orderId, String itemId, String customerEmail, int quantity, double unitPrice) {
-        this(orderId, itemId, customerEmail, quantity, unitPrice, null);
+        this(orderId, itemId, customerEmail, quantity, unitPrice, null, null);
+    }
+
+    private void subscribeToEvents() {
+        subscriberPort.subscribe("PaymentAuthorized", rawEvent -> IO.delay(() -> {
+            if (rawEvent instanceof io.effects.recipes.payable.PaymentAuthorized<?, ?> event) {
+                String ordId = event.paymentId().toString();
+                Instant now = event.occurredAt();
+                
+                DomainLogger.info("[CHOREOGRAPHY] Order caught PaymentAuthorized event. Asynchronously reserving inventory stock for order: " + ordId);
+                
+                if (warehouse != null) {
+                    // Choreographed side-effect: Reserve inventory and confirm stock hold!
+                    reserveStock(warehouse, ordId, 3600, now.plusSeconds(10));
+                    confirmStock(warehouse, now.plusSeconds(20));
+                }
+            }
+            return null;
+        })).unsafeRunSync();
     }
 
     public void applyNegotiatedDiscount(double discountPercentage) {
@@ -71,16 +101,11 @@ public class Order {
     public void completeDelivery(LogisticsProvider logistics, String actorId, String comment, Instant time) {
         logistics.completeDelivery(orderId, actorId, comment, time);
         this.status = "DELIVERED";
-        
-        // Note: For event-driven choreography, this can be triggered asynchronously 
-        // when FulfillmentCompleted event is published by LogisticsProvider!
-        // We still keep the direct manual call logic here as fallback or for explicit invocations.
     }
 
     public void requestSupportService(String deviceId, SLAContext requestContext, Instant time) {
         DomainLogger.info("\n--- [STEP 7: SERVICE LEVEL AGREEMENT (SLA) REPAIR REQUEST] ---");
         WarrantyGrant premiumGrant = new WarrantyGrant(deviceId, "PREMIUM");
         assetRegistry.checkSLAAuthorization(customerEmail, premiumGrant, requestContext, time);
-        DomainLogger.info("[WARRANTY] Severity " + requestContext.severityLevel() + " repair request authorized under Premium SLA! (Standard SLA would have failed).");
     }
 }

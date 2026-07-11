@@ -1,5 +1,10 @@
 package io.effects.samples.ecommerce.domain;
 
+import io.effects.ports.EventPublisher;
+import io.effects.ports.EventSubscriber;
+import io.effects.recipes.negotiable.NegotiationEvent;
+import io.effects.recipes.approvable.ApprovalEvent;
+import io.effects.recipes.payable.PaymentEvent;
 import io.effects.samples.ecommerce.domain.models.BulkOrderTerms;
 import java.time.Instant;
 
@@ -14,6 +19,19 @@ public class CheckoutJourney {
     private final OrderPaymentTransaction paymentTransaction;
     private Order order;
 
+    public CheckoutJourney(
+        String orderId, 
+        EventSubscriber<Object> subscriberPort,
+        EventPublisher<NegotiationEvent<String>> negotiationPublisher,
+        EventPublisher<ApprovalEvent<String, String>> approvalPublisher,
+        EventPublisher<PaymentEvent<String, Double>> paymentPublisher
+    ) {
+        this.orderId = orderId;
+        this.negotiator = new BulkContractNegotiator(orderId, negotiationPublisher);
+        this.approvalWorkflow = new DiscountApprovalWorkflow(orderId, subscriberPort, approvalPublisher);
+        this.paymentTransaction = new OrderPaymentTransaction(orderId, subscriberPort, paymentPublisher);
+    }
+
     public CheckoutJourney(String orderId) {
         this.orderId = orderId;
         this.negotiator = new BulkContractNegotiator(orderId);
@@ -21,13 +39,17 @@ public class CheckoutJourney {
         this.paymentTransaction = new OrderPaymentTransaction(orderId);
     }
 
-    public Order initiateOrder(String itemId, String customerEmail, int quantity, double unitPrice) {
-        return initiateOrder(itemId, customerEmail, quantity, unitPrice, null);
+    public Order initiateOrder(String itemId, String customerEmail, int quantity, double unitPrice, EventSubscriber<Object> subscriberPort, Warehouse warehouse) {
+        this.order = new Order(orderId, itemId, customerEmail, quantity, unitPrice, subscriberPort, warehouse);
+        return this.order;
     }
 
-    public Order initiateOrder(String itemId, String customerEmail, int quantity, double unitPrice, io.effects.ports.EventSubscriber<Object> subscriberPort) {
-        this.order = new Order(orderId, itemId, customerEmail, quantity, unitPrice, subscriberPort);
-        return this.order;
+    public Order initiateOrder(String itemId, String customerEmail, int quantity, double unitPrice, EventSubscriber<Object> subscriberPort) {
+        return initiateOrder(itemId, customerEmail, quantity, unitPrice, subscriberPort, null);
+    }
+
+    public Order initiateOrder(String itemId, String customerEmail, int quantity, double unitPrice) {
+        return initiateOrder(itemId, customerEmail, quantity, unitPrice, null, null);
     }
 
     public void startNegotiation() {
