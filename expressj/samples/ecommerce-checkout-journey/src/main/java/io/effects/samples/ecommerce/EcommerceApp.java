@@ -5,6 +5,14 @@ import io.effects.samples.ecommerce.domain.models.*;
 import java.time.Instant;
 import java.util.List;
 
+/**
+ * Main application simulation demonstrating a fully automated B2B bulk purchasing journey, 
+ * physical logistics fulfillment tracking, and post-sale corporate hardware warranty lifecycles.
+ *
+ * This simulation highlights how multiple corporate departments (Sales, Finance, Billing, 
+ * Warehouse, Logistics, Support, and Auditing) coordinate and respond automatically to 
+ * commercial events without manual step-by-step procedural calls.
+ */
 public class EcommerceApp {
 
     public static void main(String[] args) {
@@ -12,7 +20,6 @@ public class EcommerceApp {
         DomainLogger.info(" STARTING B2B E-COMMERCE BULK CHECKOUT & SLA LIFECYCLE SIMULATION");
         DomainLogger.info("========================================================================");
 
-        // Run our happy-path simulation flow
         runHappyPathSimulation();
 
         DomainLogger.info("\n========================================================================");
@@ -20,10 +27,42 @@ public class EcommerceApp {
         DomainLogger.info("========================================================================");
     }
 
+    /**
+     * Executes the happy-path corporate checkout and hardware support simulation.
+     * 
+     * --- Business Flow Description ---
+     * 1. CONTRACT NEGOTIATION: A corporate buyer negotiates pricing terms for a high-volume 
+     *    purchase of developer laptops, agreeing on a custom 40% bulk discount.
+     * 
+     * 2. THE CORE BUSINESS TRIGGER:
+     *    - Accept Terms: The buyer accepts the counter-proposed terms.
+     * 
+     * 3. THE AUTOMATED CHOREOGRAPHY CASCADE (Triggered by acceptTerms):
+     *    - Finalized Terms accepted -> Automatically submits the pricing contract for corporate reviews.
+     *    - Submittal reviewed -> The discount percentage exceeds standard policy thresholds, automatically 
+     *      generating executive review tickets for the Sales VP and CFO.
+     *    - CFO & VP Approve -> Executive sign-offs clear, automatically initiating a pre-authorization 
+     *      credit check with the payment gateway.
+     *    - Credit Authorized -> Successful payment check automatically initiates inventory stock holds 
+     *      and confirms stock reservations at the regional warehouse.
+     *    - Warehouse Hold Confirmed -> Stock confirmation automatically creates shipment tracking numbers 
+     *      with our shipping carrier (FedEx) and schedules items at the packing station.
+     *    - Items Allocated -> Shipping items are automatically boxed, labeled, and dispatched into carrier transit.
+     *    - Carrier Dispatch Complete -> Package transport is tracked until signed off at the corporate destination dock.
+     *    - Delivery Completed -> Dock sign-off automatically registers the physical laptop serials to the 
+     *      buyer's employee accounts and activates their high-tier support Service Level Agreement (SLA).
+     * 
+     * 4. POST-SALE LIFECYCLE ACTIONS:
+     *    - Technical support tickets are submitted and authorized under the newly granted Premium SLA.
+     *    - Support session diagnostics and usage metrics are metered.
+     *    - Automated cron-system schedulers run support billing settlements.
+     *    - Final payment is captured and settled.
+     *    - Cryptographic audits verify administrative signatures against corporate compliance standards.
+     */
     public static void runHappyPathSimulation() {
         Instant t0 = Instant.parse("2026-07-09T10:00:00Z");
 
-        // IDs for our entities
+        // Unique business identifiers for our corporate checkout context
         String orderId = "ORDER-B2B-5544";
         String itemId = "LAPTOP-DEV-PRO-2026";
         String customerEmail = "buyer-admin@enterprise-corp.com";
@@ -31,10 +70,10 @@ public class EcommerceApp {
 
         DomainLogger.info("[INFO] Initializing domain behavioral systems with full end-to-end event-driven choreography...");
 
-        // Create our shared in-memory pub/sub broker
+        // Setup the shared message communication channels representing our corporate enterprise broker
         io.effects.adapters.InMemoryEventSubscriber<Object> broker = new io.effects.adapters.InMemoryEventSubscriber<>();
 
-        // Aligned type-safe publishers that delegate to the broker
+        // Route various departmental events through the shared corporate broker
         io.effects.ports.EventPublisher<io.effects.recipes.negotiable.NegotiationEvent<String>> negotiationPublisher = event -> 
             broker.publish(event.getClass().getSimpleName(), event);
 
@@ -50,7 +89,7 @@ public class EcommerceApp {
         io.effects.ports.EventPublisher<io.effects.recipes.fulfillable.FulfillmentEvent<String, Integer>> fulfillmentPublisher = event -> 
             broker.publish(event.getClass().getSimpleName(), event);
 
-        // 1. Initialize our first-class domain behavioral objects with explicit capacities/identities
+        // Initialize departmental actors and link them to the shared corporate broker
         Warehouse warehouse = new Warehouse(warehouseId, itemId, 100, reservationPublisher);
 
         Checkout checkout = new Checkout(orderId, broker, negotiationPublisher, approvalPublisher, paymentPublisher);
@@ -62,8 +101,10 @@ public class EcommerceApp {
 
         DomainLogger.info("[INFO] Domain behavioral systems initialized successfully with choreographed event channels.");
 
+        // =====================================================================
         // --- 1. NEGOTIATE TERMS ---
-        DomainLogger.info("\n--- [STEP 1: NEGOTIATE TERMS] ---");
+        // =====================================================================
+        DomainLogger.info("\n--- [STEP 1: NEGOTIATE CONTRACT TERMS] ---");
         BulkOrderTerms initialTerms = new BulkOrderTerms(50, 1500.0, 0.0);
         checkout.startNegotiation();
         checkout.proposeTerms("buyer-admin", initialTerms, t0);
@@ -74,46 +115,54 @@ public class EcommerceApp {
 
         DomainLogger.info("[NEGOTIATE] Counter terms updated. Buyer accepts discounted counter terms: 40%");
         
-        // This accepts the terms, emitting a NegotiationAccepted event!
-        // This NegotiationAccepted event triggers the ENTIRE choreographed cascade completely automatically:
-        // -> submitForDiscountApproval (caught by DiscountApprovalWorkflow) -> emits RequestSubmitted (VP)
-        // -> Auto-VP Approve (caught by DiscountApprovalWorkflow) -> emits RequestSubmitted (CFO)
-        // -> Auto-CFO Approve (caught by DiscountApprovalWorkflow) -> emits RequestApproved
-        // -> Auto-Authorize Payment (caught by OrderPaymentTransaction) -> emits PaymentAuthorized
-        // -> Auto-Reserve & Confirm Stock (caught by Order) -> emits HoldConfirmed
-        // -> Auto-Initiate Shipment & Allocate (caught by LogisticsProvider) -> emits FulfillmentAllocated
-        // -> Auto-Package & Dispatch Shipping (caught by LogisticsProvider) -> emits FulfillmentDispatched
-        // -> Auto-Complete Delivery (caught by LogisticsProvider) -> emits FulfillmentCompleted
-        // -> Auto-Register Ownership & SLA Warranty (caught by AssetRegistry) -> completes end-to-end checkout!
+        // --- THE CORE BUSINESS TRIGGER ---
+        // Buyer accepts the contract terms. This acceptance fires a contract acceptance milestone,
+        // which triggers the entire multi-departmental checkout and logistics pipeline completely automatically!
         checkout.acceptTerms("buyer-admin", t0.plusSeconds(120));
 
-        // Wait a small bit for virtual-thread choreography propagation to fully complete all steps
+        // Allow a brief moment for the automated, multi-threaded corporate workflow cascade to fully run
         try { Thread.sleep(600); } catch (InterruptedException ignored) {}
 
-        // Query the final state of fulfillment via our logistics provider to prove choreography successfully completed!
+        // Verify that the logistics courier has indeed completed and delivered the items automatically
         String finalFulfillmentStatus = logistics.getFulfillmentStatus(orderId);
-        DomainLogger.info("[CHOREOGRAPHY] Querying final logistics shipping status: " + finalFulfillmentStatus);
+        DomainLogger.info("[CHOREOGRAPHY] Auditing final logistics delivery status: " + finalFulfillmentStatus);
 
+        // =====================================================================
         // --- 2. SERVICE LEVEL AGREEMENT (SLA) REPAIR REQUEST ---
+        // =====================================================================
+        // The newly delivered laptop is registered, and its premium support SLA is verified to authorize
+        // repair service for a critical technical issue.
+        DomainLogger.info("\n--- [STEP 2: SERVICE LEVEL AGREEMENT (SLA) REPAIR REQUEST] ---");
         order.requestSupportService("LAPTOP-DEVP-01", new SLAContext("REPAIR", 5), t0.plusSeconds(270));
 
+        // =====================================================================
         // --- 3. PREMIUM SUPPORT USAGE METERING ---
+        // =====================================================================
+        // Logs diagnostic telemetry metrics to meter corporate usage of high-tier SLA services.
         DomainLogger.info("\n--- [STEP 3: PREMIUM SUPPORT USAGE METERING] ---");
         supportCycle.startSupportSession(t0.plusSeconds(280));
         supportCycle.logDiagnosticTelemetry(new DiagnosticMetric(3, 500), t0.plusSeconds(290));
         supportCycle.logDiagnosticTelemetry(new DiagnosticMetric(4, 800), t0.plusSeconds(300));
-        DomainLogger.info("[METER] Support telemetry logged successfully.");
+        DomainLogger.info("[METER] Support session diagnostic telemetry logged successfully.");
 
+        // =====================================================================
         // --- 4. SCHEDULER & BILLING SETTLEMENT ---
+        // =====================================================================
+        // Schedulers run support usage billing runs to settle outstanding metered session costs,
+        // and final payment capture is completed against the authorized total.
         DomainLogger.info("\n--- [STEP 4: SCHEDULER TRIGGER & BILLING RUN] ---");
         Instant runTime = t0.plusSeconds(3600);
         supportCycle.settleSupportBilling("cron-system", runTime, t0.plusSeconds(310));
 
-        double totalPrice = 50 * 1500.0 * 0.60;
+        double totalPrice = 50 * 1500.0 * 0.60; // 50 Laptops with 40% discount = $45,000
         checkout.capturePayment("buyer-admin", totalPrice, "Capture full amount upon warehouse dispatch.", runTime);
 
+        // =====================================================================
         // --- 5. COMPLIANCE SECURITY AUDITING ---
-        DomainLogger.info("\n--- [STEP 5: CRYPTOGRAPHIC COMPLIANCE AUDITING] ---");
+        // =====================================================================
+        // Audits the cryptographic signatures of administrative approvals to verify compliance
+        // with corporate purchasing policies.
+        DomainLogger.info("\n--- [STEP 5: COMPLIANCE SECURITY AUDITING] ---");
         List<AuditEntry> administrativeTrail = List.of(
             new AuditEntry("INITIATED", "buyer-admin", "SIGNATURE-MD5"),
             new AuditEntry("DISCOUNT_APPROVED_VP", "vp-sarah", "SIGNATURE-SHA256"),
