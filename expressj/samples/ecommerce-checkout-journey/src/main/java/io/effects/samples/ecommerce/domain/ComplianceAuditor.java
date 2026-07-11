@@ -1,14 +1,45 @@
-package io.effects.samples.ecommerce.auditable;
+package io.effects.samples.ecommerce.domain;
 
 import io.effects.Either;
-import io.effects.recipes.auditable.AuditableRequest;
-import io.effects.recipes.auditable.AuditLedger;
-import io.effects.recipes.auditable.AuditStep;
+import io.effects.recipes.auditable.*;
+import io.effects.samples.ecommerce.domain.models.AuditCumulativeState;
+import io.effects.samples.ecommerce.domain.models.AuditEntry;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
-public class SecurityComplianceAuditLogger implements AuditableRequest<String, AuditEntry, AuditCumulativeState> {
+public class ComplianceAuditor implements AuditableRequest<String, AuditEntry, AuditCumulativeState> {
+    private final String orderId;
+    private final AuditableProcess<String, AuditEntry, AuditCumulativeState> auditProcess;
+
+    public ComplianceAuditor(String orderId) {
+        this.orderId = orderId;
+        this.auditProcess = new AuditableProcess<>();
+    }
+
+    public void initiate() {
+        auditProcess.register(orderId, this).unsafeRunSync();
+        auditProcess.initiate(orderId).unsafeRunSync();
+    }
+
+    public void record(String actorId, AuditEntry entry, Instant time) {
+        var res = auditProcess.record(orderId, actorId, entry, time).unsafeRunSync();
+        if (res.isLeft()) {
+            throw new RuntimeException("Audit recording failed: " + res.getLeft());
+        }
+    }
+
+    public AuditCumulativeState replay() {
+        var res = auditProcess.replay(orderId).unsafeRunSync();
+        if (res.isLeft()) {
+            throw new RuntimeException("Audit replay failed: " + res.getLeft());
+        }
+        AuditCumulativeState state = res.getRight();
+        DomainLogger.info("[AUDIT] Replayed security state compliance status: " + (state.isCompliant() ? "SECURE & COMPLIANT" : "NON-COMPLIANT"));
+        DomainLogger.info("[AUDIT] Recorded Chronology:");
+        state.recordedActions().forEach(act -> DomainLogger.info("  -> " + act));
+        return state;
+    }
 
     @Override
     public Either<String, Void> evaluateEntry(AuditLedger<String, AuditEntry> ledger, AuditEntry detail, Instant now) {

@@ -99,7 +99,7 @@ public final class NegotiableProcess<ID, P> {
 
                 return repository.save(sessionId, ledger)
                     .flatMap(v -> publisher.publish(event))
-                    .flatMap(v -> telemetry.recordSuccess("negotiable", sessionId.toString() + ":offer"))
+                    .flatMap(v -> telemetry.recordSuccess("negotiable", sessionId + ":offer"))
                     .flatMap(v -> telemetry.recordDuration("negotiable", sessionId.toString(), System.currentTimeMillis() - startTime))
                     .map(v -> Either.<String, NegotiationLedger<ID, P>>right(ledger));
             })

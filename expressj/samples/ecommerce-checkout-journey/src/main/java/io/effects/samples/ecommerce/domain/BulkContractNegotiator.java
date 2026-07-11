@@ -2,7 +2,6 @@ package io.effects.samples.ecommerce.domain;
 
 import io.effects.Either;
 import io.effects.ports.EventPublisher;
-import io.effects.adapters.InMemoryEventPublisher;
 import io.effects.adapters.InMemoryStateRepository;
 import io.effects.adapters.NoOpTelemetryPort;
 import io.effects.recipes.negotiable.*;
@@ -17,10 +16,6 @@ public class BulkContractNegotiator implements NegotiableRequest<String, BulkOrd
         this.orderId = orderId;
         this.negotiationProcess = new NegotiableProcess<>(new InMemoryStateRepository<>(), publisher, new NoOpTelemetryPort());
         this.negotiationProcess.register(orderId, this).unsafeRunSync();
-    }
-
-    public BulkContractNegotiator(String orderId) {
-        this(orderId, new InMemoryEventPublisher<>());
     }
 
     public void initiate() {

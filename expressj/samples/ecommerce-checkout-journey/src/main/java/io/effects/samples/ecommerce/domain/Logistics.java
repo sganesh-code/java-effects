@@ -4,7 +4,6 @@ import io.effects.Either;
 import io.effects.IO;
 import io.effects.ports.EventPublisher;
 import io.effects.ports.EventSubscriber;
-import io.effects.adapters.InMemoryEventPublisher;
 import io.effects.adapters.InMemoryStateRepository;
 import io.effects.adapters.NoOpTelemetryPort;
 import io.effects.recipes.fulfillable.*;
@@ -31,14 +30,6 @@ public class Logistics implements FulfillableRequest<String, Integer> {
         if (subscriberPort != null) {
             subscribeToEvents();
         }
-    }
-
-    public Logistics(String providerName, EventSubscriber<Object> subscriberPort) {
-        this(providerName, subscriberPort, new InMemoryEventPublisher<>());
-    }
-
-    public Logistics(String providerName) {
-        this(providerName, null, new InMemoryEventPublisher<>());
     }
 
     /**

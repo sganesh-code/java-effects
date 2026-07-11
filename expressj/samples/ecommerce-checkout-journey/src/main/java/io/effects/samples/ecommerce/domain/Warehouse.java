@@ -41,8 +41,6 @@ public class Warehouse implements ReservableResource<String, Integer> {
         this(warehouseId, itemId, capacity, new InMemoryEventPublisher<>());
     }
 
-    // --- Core Inventory Operations ---
-
     /**
      * Secures a temporary stock reservation for a specific purchase order. 
      * Ensures that subsequent checkouts do not overbook the warehouse's physical storage capacity.
@@ -71,8 +69,6 @@ public class Warehouse implements ReservableResource<String, Integer> {
         DomainLogger.info("[INVENTORY] Reserved stock confirmed successfully! Allocation ID: " + reservation.reservationId());
         return reservation;
     }
-
-    // --- Internal Business Invariants & Policies ---
 
     /**
      * Evaluation Policy: Assesses if the warehouse has sufficient stock capacity to support a new hold request.

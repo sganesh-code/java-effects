@@ -4,6 +4,7 @@ import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Supplier;
 
 /**
  * The internal execution engine for IO computations.
@@ -55,21 +56,16 @@ final class IORunLoop {
         while (current != null && !suspended) {
             try {
                 switch (current) {
-                    case IO.Pure<?> pure -> {
-                        Object val = pure.value();
-                        current = popAndApply(val);
-                    }
-                    case IO.Delay<?> delay -> {
+                    case IO.Pure(Object val) -> current = popAndApply(val);
+                    case IO.Delay<?>(Supplier<?> thunk) -> {
                         try {
-                            Object val = delay.thunk().get();
+                            Object val = thunk.get();
                             current = popAndApply(val);
                         } catch (Throwable t) {
                             current = popAndHandleError(t);
                         }
                     }
-                    case IO.Error<?> err -> {
-                        current = popAndHandleError(err.error());
-                    }
+                    case IO.Error<?>(var error) -> current = popAndHandleError(error);
                     case IO.FlatMap<?, ?> fm -> {
                         stack.push(new FlatMapFrame((Function<Object, IO<?>>) fm.f()));
                         current = fm.source();
@@ -81,21 +77,18 @@ final class IORunLoop {
                     case IO.Async<?> async -> {
                         suspended = true;
                         try {
-                            async.register().accept(result -> {
+                            async.register().accept(result ->
                                 // Resume execution asynchronously on the virtual thread pool
-                                runtime.execute(() -> {
-                                    result.fold(
-                                        err -> {
-                                            execute(popAndHandleError(err));
-                                            return null;
-                                        },
-                                        val -> {
-                                            execute(popAndApply(val));
-                                            return null;
-                                        }
-                                    );
-                                });
-                            });
+                                runtime.execute(() -> result.fold(
+                                    err -> {
+                                        execute(popAndHandleError(err));
+                                        return null;
+                                    },
+                                    val -> {
+                                        execute(popAndApply(val));
+                                        return null;
+                                    }
+                                )));
                         } catch (Throwable t) {
                             execute(popAndHandleError(t));
                         }

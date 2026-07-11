@@ -2,8 +2,8 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/modules/lib/expressj.lib.main.iml" filepath="$PROJECT_DIR$/.idea/modules/lib/expressj.lib.main.iml" />
-      <module fileurl="file://$PROJECT_DIR$/.idea/modules/lib/expressj.lib.test.iml" filepath="$PROJECT_DIR$/.idea/modules/lib/expressj.lib.test.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/core/expressj.core.main.iml" filepath="$PROJECT_DIR$/.idea/modules/core/expressj.core.main.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/core/expressj.core.test.iml" filepath="$PROJECT_DIR$/.idea/modules/core/expressj.core.test.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/modules/samples/ecommerce-checkout-journey/expressj.samples.ecommerce-checkout-journey.main.iml" filepath="$PROJECT_DIR$/.idea/modules/samples/ecommerce-checkout-journey/expressj.samples.ecommerce-checkout-journey.main.iml" />
     </modules>
   </component>
