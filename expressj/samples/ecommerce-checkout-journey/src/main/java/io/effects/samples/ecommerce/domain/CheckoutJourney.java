@@ -69,6 +69,10 @@ public class CheckoutJourney {
         if (order != null) {
             order.applyNegotiatedDiscount(40.0);
         }
+        
+        // Direct, unified orchestration: Accept terms automatically triggers submission for approvals
+        // since they represent operations on the same logical checkout aggregate root context!
+        submitForDiscountApproval("sales-rep", 40.0, "Bulk contract for 50 Laptops at 40% discount", time.plusSeconds(10));
     }
 
     public void submitForDiscountApproval(String actorId, double discountPercentage, String description, Instant time) {

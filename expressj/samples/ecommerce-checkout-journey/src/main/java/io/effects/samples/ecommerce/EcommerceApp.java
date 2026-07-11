@@ -75,7 +75,7 @@ public class EcommerceApp {
         DomainLogger.info("[NEGOTIATE] Counter terms updated. Buyer accepts discounted counter terms: 40%");
         
         // This accepts the terms, emitting a NegotiationAccepted event!
-        // This NegotiationAccepted event triggers:
+        // This NegotiationAccepted event triggers the ENTIRE choreographed cascade completely automatically:
         // -> submitForDiscountApproval (caught by DiscountApprovalWorkflow) -> emits RequestSubmitted (VP)
         // -> Auto-VP Approve (caught by DiscountApprovalWorkflow) -> emits RequestSubmitted (CFO)
         // -> Auto-CFO Approve (caught by DiscountApprovalWorkflow) -> emits RequestApproved
@@ -87,8 +87,8 @@ public class EcommerceApp {
         // -> Auto-Register Ownership & SLA Warranty (caught by AssetRegistry) -> completes end-to-end checkout!
         checkout.acceptTerms("buyer-admin", t0.plusSeconds(120));
 
-        // Wait a small bit for virtual-thread choreography propagation
-        try { Thread.sleep(500); } catch (InterruptedException ignored) {}
+        // Wait a small bit for virtual-thread choreography propagation to fully complete all steps
+        try { Thread.sleep(600); } catch (InterruptedException ignored) {}
 
         // --- 2. SERVICE LEVEL AGREEMENT (SLA) REPAIR REQUEST ---
         order.requestSupportService("LAPTOP-DEVP-01", new SLAContext("REPAIR", 5), t0.plusSeconds(270));

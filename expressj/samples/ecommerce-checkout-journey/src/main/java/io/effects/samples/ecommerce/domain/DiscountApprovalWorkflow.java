@@ -32,21 +32,7 @@ public class DiscountApprovalWorkflow implements ApprovableRequest<String, Strin
     }
 
     private void subscribeToEvents() {
-        // 1. NegotiationAccepted -> Auto submit for approval
-        subscriberPort.subscribe("NegotiationAccepted", rawEvent -> IO.delay(() -> {
-            if (rawEvent instanceof io.effects.recipes.negotiable.NegotiationEvent.NegotiationAccepted<?> event) {
-                String ordId = event.sessionId().toString();
-                Instant now = event.occurredAt();
-                
-                DomainLogger.info("[CHOREOGRAPHY] DiscountApprovalWorkflow caught NegotiationAccepted event. Asynchronously submitting discount for approval for order: " + ordId);
-                
-                // Choreographed side-effect: Auto-submit the bulk discount for approvals!
-                submitForDiscountApproval("sales-rep", 40.0, "Bulk contract for 50 Laptops at 40% discount", now.plusSeconds(10));
-            }
-            return null;
-        })).unsafeRunSync();
-
-        // 2. RequestSubmitted -> Auto approve (Sarah and steve robots)
+        // RequestSubmitted -> Auto approve (Sarah and steve robots)
         subscriberPort.subscribe("RequestSubmitted", rawEvent -> IO.delay(() -> {
             if (rawEvent instanceof io.effects.recipes.approvable.RequestSubmitted<?, ?> event) {
                 String ordId = event.requestId().toString();
