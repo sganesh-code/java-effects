@@ -269,4 +269,12 @@ public final class FulfillmentProcess<ID, Q> {
             })
             .yield((startTime, optLedger, result) -> result);
     }
+
+    /**
+     * Finds and loads the fulfillment ledger state by its identifier.
+     */
+    public IO<java.util.Optional<FulfillmentLedger<ID, Q>>> find(ID fulfillmentId) {
+        Objects.requireNonNull(fulfillmentId);
+        return repository.find(fulfillmentId);
+    }
 }

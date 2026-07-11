@@ -53,12 +53,12 @@ public class EcommerceApp {
         // 1. Initialize our first-class domain behavioral objects with explicit capacities/identities
         Warehouse warehouse = new Warehouse(warehouseId, itemId, 100, reservationPublisher);
 
-        CheckoutJourney checkout = new CheckoutJourney(orderId, broker, negotiationPublisher, approvalPublisher, paymentPublisher);
+        Checkout checkout = new Checkout(orderId, broker, negotiationPublisher, approvalPublisher, paymentPublisher);
         Order order = checkout.initiateOrder(itemId, customerEmail, 50, 1500.0, broker, warehouse);
 
-        LogisticsProvider logistics = new LogisticsProvider("FedEx & Partners", broker, fulfillmentPublisher);
+        Logistics logistics = new Logistics("FedEx & Partners", broker, fulfillmentPublisher);
 
-        PostSaleSupportCycle supportCycle = new PostSaleSupportCycle(customerEmail, orderId);
+        PostSaleSupport supportCycle = new PostSaleSupport(customerEmail, orderId);
 
         DomainLogger.info("[INFO] Domain behavioral systems initialized successfully with choreographed event channels.");
 
@@ -89,6 +89,10 @@ public class EcommerceApp {
 
         // Wait a small bit for virtual-thread choreography propagation to fully complete all steps
         try { Thread.sleep(600); } catch (InterruptedException ignored) {}
+
+        // Query the final state of fulfillment via our logistics provider to prove choreography successfully completed!
+        String finalFulfillmentStatus = logistics.getFulfillmentStatus(orderId);
+        DomainLogger.info("[CHOREOGRAPHY] Querying final logistics shipping status: " + finalFulfillmentStatus);
 
         // --- 2. SERVICE LEVEL AGREEMENT (SLA) REPAIR REQUEST ---
         order.requestSupportService("LAPTOP-DEVP-01", new SLAContext("REPAIR", 5), t0.plusSeconds(270));

@@ -14,12 +14,12 @@ import java.time.Instant;
  * First-class business object representing a logistics and shipping fulfillment provider.
  * It encapsulates and directly implements the Fulfillable recipe process.
  */
-public class LogisticsProvider implements FulfillableRequest<String, Integer> {
+public class Logistics implements FulfillableRequest<String, Integer> {
     private final String providerName;
     private final FulfillmentProcess<String, Integer> shippingProcess;
     private final EventSubscriber<Object> subscriberPort;
 
-    public LogisticsProvider(String providerName, EventSubscriber<Object> subscriberPort, EventPublisher<FulfillmentEvent<String, Integer>> publisher) {
+    public Logistics(String providerName, EventSubscriber<Object> subscriberPort, EventPublisher<FulfillmentEvent<String, Integer>> publisher) {
         this.providerName = providerName;
         this.shippingProcess = new FulfillmentProcess<>(new InMemoryStateRepository<>(), publisher, new NoOpTelemetryPort());
         this.subscriberPort = subscriberPort;
@@ -28,11 +28,11 @@ public class LogisticsProvider implements FulfillableRequest<String, Integer> {
         }
     }
 
-    public LogisticsProvider(String providerName, EventSubscriber<Object> subscriberPort) {
+    public Logistics(String providerName, EventSubscriber<Object> subscriberPort) {
         this(providerName, subscriberPort, new InMemoryEventPublisher<>());
     }
 
-    public LogisticsProvider(String providerName) {
+    public Logistics(String providerName) {
         this(providerName, null, new InMemoryEventPublisher<>());
     }
 
@@ -164,5 +164,13 @@ public class LogisticsProvider implements FulfillableRequest<String, Integer> {
             return Either.left("Cannot release items once shipped or completed.");
         }
         return Either.right(FulfillmentLedger.Status.INITIAL);
+    }
+
+    /**
+     * Queries the final state of the fulfillment ledger.
+     */
+    public String getFulfillmentStatus(String orderId) {
+        var optLedger = shippingProcess.find(orderId).unsafeRunSync();
+        return optLedger.map(ledger -> ledger.status().toString()).orElse("UNKNOWN");
     }
 }
