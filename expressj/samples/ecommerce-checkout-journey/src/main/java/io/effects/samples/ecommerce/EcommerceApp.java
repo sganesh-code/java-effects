@@ -75,68 +75,41 @@ public class EcommerceApp {
         DomainLogger.info("[NEGOTIATE] Counter terms updated. Buyer accepts discounted counter terms: 40%");
         
         // This accepts the terms, emitting a NegotiationAccepted event!
-        // This NegotiationAccepted event is caught by DiscountApprovalWorkflow which automatically triggers submitForDiscountApproval!
+        // This NegotiationAccepted event triggers:
+        // -> submitForDiscountApproval (caught by DiscountApprovalWorkflow) -> emits RequestSubmitted (VP)
+        // -> Auto-VP Approve (caught by DiscountApprovalWorkflow) -> emits RequestSubmitted (CFO)
+        // -> Auto-CFO Approve (caught by DiscountApprovalWorkflow) -> emits RequestApproved
+        // -> Auto-Authorize Payment (caught by OrderPaymentTransaction) -> emits PaymentAuthorized
+        // -> Auto-Reserve & Confirm Stock (caught by Order) -> emits HoldConfirmed
+        // -> Auto-Initiate Shipment & Allocate (caught by LogisticsProvider) -> emits FulfillmentAllocated
+        // -> Auto-Package & Dispatch Shipping (caught by LogisticsProvider) -> emits FulfillmentDispatched
+        // -> Auto-Complete Delivery (caught by LogisticsProvider) -> emits FulfillmentCompleted
+        // -> Auto-Register Ownership & SLA Warranty (caught by AssetRegistry) -> completes end-to-end checkout!
         checkout.acceptTerms("buyer-admin", t0.plusSeconds(120));
 
         // Wait a small bit for virtual-thread choreography propagation
-        try { Thread.sleep(100); } catch (InterruptedException ignored) {}
+        try { Thread.sleep(500); } catch (InterruptedException ignored) {}
 
-        // --- 2. MULTI-LEVEL APPROVAL FLOW ---
-        DomainLogger.info("\n--- [STEP 2: MULTI-LEVEL APPROVAL FLOW (MANUAL CFO & VP REVIEWS)] ---");
-        // Note: submitForDiscountApproval was ALREADY automatically triggered by NegotiationAccepted choreography!
-        // We only need to approve at each level to complete the approval aggregate!
-        checkout.approveDiscount("vp-sarah", "SALES_VP", "Approved volume discount - strategic corporate account.", t0.plusSeconds(140));
-        
-        // This final CFO approval moves the approval aggregate to APPROVED status, emitting a RequestApproved event!
-        // This RequestApproved event is caught by OrderPaymentTransaction which automatically triggers authorizePayment!
-        checkout.approveDiscount("cfo-steve", "CFO", "Financially approved.", t0.plusSeconds(150));
-
-        // Wait a small bit for virtual-thread choreography propagation
-        try { Thread.sleep(100); } catch (InterruptedException ignored) {}
-
-        // --- 3. PAYMENT AUTHORIZATION & RESERVATION ---
-        // Note: authorizePayment was ALREADY automatically triggered by RequestApproved choreography!
-        // Authorizing payment emitted a PaymentAuthorized event!
-        // This PaymentAuthorized event was caught by Order, which automatically reserved stock & confirmed stock on the warehouse!
-        // Confirming stock hold emitted a HoldConfirmed event!
-        // This HoldConfirmed event was caught by LogisticsProvider, which automatically initiated shipment and allocated items!
-
-        // Wait a small bit for virtual-thread choreography propagation
-        try { Thread.sleep(100); } catch (InterruptedException ignored) {}
-
-        // --- 4. LOGISTICS FULFILLMENT & DELIVERIES ---
-        DomainLogger.info("\n--- [STEP 4: LOGISTICS SHIPPING PACKAGING & DISPATCH] ---");
-        order.packageShippingItems(logistics, "logistics-bot", "Boxed and labeled.", t0.plusSeconds(220));
-        order.dispatchShipment(logistics, "carrier-fedex", "Dispatched via FedEx Express", t0.plusSeconds(230));
-        
-        DomainLogger.info("\n--- [STEP 5: DELIVERY COMPLETION & CHOREOGRAPHED POST-SALE ENTITLEMENTS] ---");
-        order.completeDelivery(logistics, "buyer-admin", "Delivered and signed at corporate dock.", t0.plusSeconds(240));
-        // Note: completing delivery executes completion on LogisticsProvider, emitting a FulfillmentCompleted event!
-        // This FulfillmentCompleted event is caught by AssetRegistry, which automatically registers ownership and grants PREMIUM SLA warranty!
-
-        // Wait a small bit for virtual-thread choreography propagation
-        try { Thread.sleep(100); } catch (InterruptedException ignored) {}
-
-        // --- 6. SERVICE LEVEL AGREEMENT (SLA) REPAIR REQUEST ---
+        // --- 2. SERVICE LEVEL AGREEMENT (SLA) REPAIR REQUEST ---
         order.requestSupportService("LAPTOP-DEVP-01", new SLAContext("REPAIR", 5), t0.plusSeconds(270));
 
-        // --- 7. PREMIUM SUPPORT USAGE METERING ---
-        DomainLogger.info("\n--- [STEP 7: PREMIUM SUPPORT USAGE METERING] ---");
+        // --- 3. PREMIUM SUPPORT USAGE METERING ---
+        DomainLogger.info("\n--- [STEP 3: PREMIUM SUPPORT USAGE METERING] ---");
         supportCycle.startSupportSession(t0.plusSeconds(280));
         supportCycle.logDiagnosticTelemetry(new DiagnosticMetric(3, 500), t0.plusSeconds(290));
         supportCycle.logDiagnosticTelemetry(new DiagnosticMetric(4, 800), t0.plusSeconds(300));
         DomainLogger.info("[METER] Support telemetry logged successfully.");
 
-        // --- 8. SCHEDULER & BILLING SETTLEMENT ---
-        DomainLogger.info("\n--- [STEP 8: SCHEDULER TRIGGER & BILLING RUN] ---");
+        // --- 4. SCHEDULER & BILLING SETTLEMENT ---
+        DomainLogger.info("\n--- [STEP 4: SCHEDULER TRIGGER & BILLING RUN] ---");
         Instant runTime = t0.plusSeconds(3600);
         supportCycle.settleSupportBilling("cron-system", runTime, t0.plusSeconds(310));
 
         double totalPrice = 50 * 1500.0 * 0.60;
         checkout.capturePayment("buyer-admin", totalPrice, "Capture full amount upon warehouse dispatch.", runTime);
 
-        // --- 9. COMPLIANCE SECURITY AUDITING ---
-        DomainLogger.info("\n--- [STEP 9: CRYPTOGRAPHIC COMPLIANCE AUDITING] ---");
+        // --- 5. COMPLIANCE SECURITY AUDITING ---
+        DomainLogger.info("\n--- [STEP 5: CRYPTOGRAPHIC COMPLIANCE AUDITING] ---");
         List<AuditEntry> administrativeTrail = List.of(
             new AuditEntry("INITIATED", "buyer-admin", "SIGNATURE-MD5"),
             new AuditEntry("DISCOUNT_APPROVED_VP", "vp-sarah", "SIGNATURE-SHA256"),

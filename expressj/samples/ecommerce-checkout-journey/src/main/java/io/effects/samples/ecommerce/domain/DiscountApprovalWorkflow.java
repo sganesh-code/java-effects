@@ -32,6 +32,7 @@ public class DiscountApprovalWorkflow implements ApprovableRequest<String, Strin
     }
 
     private void subscribeToEvents() {
+        // 1. NegotiationAccepted -> Auto submit for approval
         subscriberPort.subscribe("NegotiationAccepted", rawEvent -> IO.delay(() -> {
             if (rawEvent instanceof io.effects.recipes.negotiable.NegotiationEvent.NegotiationAccepted<?> event) {
                 String ordId = event.sessionId().toString();
@@ -41,6 +42,26 @@ public class DiscountApprovalWorkflow implements ApprovableRequest<String, Strin
                 
                 // Choreographed side-effect: Auto-submit the bulk discount for approvals!
                 submitForDiscountApproval("sales-rep", 40.0, "Bulk contract for 50 Laptops at 40% discount", now.plusSeconds(10));
+            }
+            return null;
+        })).unsafeRunSync();
+
+        // 2. RequestSubmitted -> Auto approve (Sarah and steve robots)
+        subscriberPort.subscribe("RequestSubmitted", rawEvent -> IO.delay(() -> {
+            if (rawEvent instanceof io.effects.recipes.approvable.RequestSubmitted<?, ?> event) {
+                String ordId = event.requestId().toString();
+                String currentRequired = event.requiredAuthority().toString();
+                Instant now = event.occurredAt();
+                
+                DomainLogger.info("[CHOREOGRAPHY] DiscountApprovalWorkflow caught RequestSubmitted. Asynchronously applying decision for role: " + currentRequired);
+                
+                if ("SALES_VP".equals(currentRequired)) {
+                    // Automated VP Sarah approves strategic corporate accounts
+                    approveDiscount("vp-sarah", "SALES_VP", "Approved volume discount - strategic corporate account.", now.plusSeconds(5));
+                } else if ("CFO".equals(currentRequired)) {
+                    // Automated CFO Steve approves
+                    approveDiscount("cfo-steve", "CFO", "Financially approved via automated corporate CFO policy.", now.plusSeconds(5));
+                }
             }
             return null;
         })).unsafeRunSync();

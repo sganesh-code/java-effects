@@ -37,10 +37,11 @@ public class LogisticsProvider implements FulfillableRequest<String, Integer> {
     }
 
     private void subscribeToEvents() {
+        // 1. HoldConfirmed -> initiate and allocate
         subscriberPort.subscribe("HoldConfirmed", rawEvent -> IO.delay(() -> {
             if (rawEvent instanceof io.effects.recipes.reservable.HoldConfirmed<?, ?> event) {
                 String orderId = event.actorId();
-                String actorId = event.actorId();
+                String actorId = "buyer-admin";
                 int qty = ((Number) event.quantity()).intValue();
                 Instant now = event.occurredAt();
                 
@@ -48,7 +49,36 @@ public class LogisticsProvider implements FulfillableRequest<String, Integer> {
                 
                 // Choreographed side-effects triggered automatically
                 initiateShipment(orderId);
-                allocateItems(orderId, actorId, qty, "Asynchronously allocated items via HoldConfirmed choreography", now.plusSeconds(10));
+                allocateItems(orderId, actorId, qty, "Asynchronously allocated items via HoldConfirmed choreography", now.plusSeconds(5));
+            }
+            return null;
+        })).unsafeRunSync();
+
+        // 2. FulfillmentAllocated -> package and dispatch
+        subscriberPort.subscribe("FulfillmentAllocated", rawEvent -> IO.delay(() -> {
+            if (rawEvent instanceof io.effects.recipes.fulfillable.FulfillmentAllocated<?, ?> event) {
+                String orderId = event.fulfillmentId().toString();
+                Instant now = event.occurredAt();
+                
+                DomainLogger.info("[CHOREOGRAPHY] LogisticsProvider caught FulfillmentAllocated event. Asynchronously packaging and dispatching: " + orderId);
+                
+                // Choreographed packaging and dispatch steps triggered automatically
+                packageItems(orderId, "logistics-bot", 50, "Boxed and labeled via automated choreography", now.plusSeconds(5));
+                dispatchShipment(orderId, "carrier-fedex", "Dispatched via FedEx Express via automated choreography", now.plusSeconds(10));
+            }
+            return null;
+        })).unsafeRunSync();
+
+        // 3. FulfillmentDispatched -> complete delivery
+        subscriberPort.subscribe("FulfillmentDispatched", rawEvent -> IO.delay(() -> {
+            if (rawEvent instanceof io.effects.recipes.fulfillable.FulfillmentDispatched<?, ?> event) {
+                String orderId = event.fulfillmentId().toString();
+                Instant now = event.occurredAt();
+                
+                DomainLogger.info("[CHOREOGRAPHY] LogisticsProvider caught FulfillmentDispatched event. Asynchronously completing delivery for: " + orderId);
+                
+                // Choreographed delivery completion triggered automatically
+                completeDelivery(orderId, "buyer-admin", "Delivered and signed at corporate dock via automated choreography", now.plusSeconds(5));
             }
             return null;
         })).unsafeRunSync();
