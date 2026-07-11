@@ -10,60 +10,78 @@ import io.effects.adapters.NoOpTelemetryPort;
 import io.effects.recipes.payable.*;
 import java.time.Instant;
 
-public class OrderPaymentTransaction implements PayableRequest<String, Double> {
+/**
+ * Represents a purchase transaction payment handler. 
+ * It manages buyer account credit card pre-authorizations, final billing captures, and refund transactions.
+ */
+public class Payment implements PayableRequest<String, Double> {
     private final String orderId;
     private final PayableProcess<String, Double> paymentProcess;
     private final EventSubscriber<Object> subscriberPort;
-    private final EventPublisher<PaymentEvent<String, Double>> publisherPort;
 
-    public OrderPaymentTransaction(String orderId, EventSubscriber<Object> subscriberPort, EventPublisher<PaymentEvent<String, Double>> publisherPort) {
+    /**
+     * Initializes a payment transaction coordinator linked to a unique purchase order ID.
+     */
+    public Payment(String orderId, EventSubscriber<Object> subscriberPort, EventPublisher<PaymentEvent<String, Double>> publisherPort) {
         this.orderId = orderId;
         this.subscriberPort = subscriberPort;
-        this.publisherPort = publisherPort;
         this.paymentProcess = new PayableProcess<>(new InMemoryStateRepository<>(), publisherPort, new NoOpTelemetryPort());
         this.paymentProcess.register(orderId, this).unsafeRunSync();
         if (subscriberPort != null) {
-            subscribeToEvents();
+            setupPaymentTriggers();
         }
     }
 
-    public OrderPaymentTransaction(String orderId) {
+    public Payment(String orderId) {
         this(orderId, null, new InMemoryEventPublisher<>());
     }
 
-    private void subscribeToEvents() {
+    /**
+     * Configures automatic triggers to execute credit authorizations when preceding discount 
+     * approval checks successfully clear.
+     */
+    private void setupPaymentTriggers() {
         subscriberPort.subscribe("RequestApproved", rawEvent -> IO.delay(() -> {
             if (rawEvent instanceof io.effects.recipes.approvable.RequestApproved<?, ?> event) {
                 String ordId = event.requestId().toString();
                 Instant now = event.occurredAt();
                 
-                DomainLogger.info("[CHOREOGRAPHY] OrderPaymentTransaction caught RequestApproved event. Asynchronously authorizing payment for order: " + ordId);
+                DomainLogger.info("[PAYMENT] Corporate discount approval cleared successfully. Automatically pre-authorizing credit for order: " + ordId);
                 
                 double totalPrice = 50 * 1500.0 * 0.60; // 50 Laptops at 40% discount = $45,000
-                // Choreographed side-effect: Auto-authorize the payment transaction!
                 authorize("buyer-admin", totalPrice, now.plusSeconds(10));
             }
             return null;
         })).unsafeRunSync();
     }
 
+    // --- Core Payment Operations ---
+
+    /**
+     * Pre-authorizes buyer credit, reserving the purchase funds on their corporate account.
+     */
     public void authorize(String actorId, double amount, Instant time) {
-        DomainLogger.info("[PAYMENT] Authorizing purchase amount of $" + amount);
+        DomainLogger.info("[PAYMENT] Pre-authorizing purchase amount of $" + amount + "...");
         var res = paymentProcess.authorize(orderId, actorId, amount, time).unsafeRunSync();
         if (res.isLeft()) {
-            throw new RuntimeException("Authorization failed: " + res.getLeft());
+            throw new RuntimeException("Credit pre-authorization failed: " + res.getLeft());
         }
-        DomainLogger.info("[PAYMENT] Credit authorized. Status: " + res.getRight().status());
+        DomainLogger.info("[PAYMENT] Credit successfully pre-authorized! Ledger status: " + res.getRight().status());
     }
 
+    /**
+     * Settles the billing transaction, capturing the pre-authorized funds and finalizing the sale.
+     */
     public void capture(String actorId, double amount, String description, Instant time) {
-        DomainLogger.info("[PAYMENT] Capturing payment of $" + amount + " against authorized order total...");
+        DomainLogger.info("[PAYMENT] Dispatch completed. Capturing $" + amount + " against corporate credit authorization...");
         var res = paymentProcess.capture(orderId, actorId, amount, description, time).unsafeRunSync();
         if (res.isLeft()) {
-            throw new RuntimeException("Capture failed: " + res.getLeft());
+            throw new RuntimeException("Payment capture failed: " + res.getLeft());
         }
-        DomainLogger.info("[PAYMENT] Order capture finalized. Status: " + res.getRight().status() + ". Captured amount: $" + amount);
+        DomainLogger.info("[PAYMENT] Settle-capture finalized. Transaction status: " + res.getRight().status() + ". Settle amount: $" + amount);
     }
+
+    // --- Internal Business Invariants & Policies ---
 
     @Override
     public Either<String, Void> evaluateAuthorization(PaymentLedger<String, Double> ledger, Double amount, Instant now) {

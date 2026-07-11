@@ -9,85 +9,85 @@ import io.effects.samples.ecommerce.domain.models.BulkOrderTerms;
 import java.time.Instant;
 
 /**
- * Collaboration object that coordinates the B2B checkout workflow stages:
- * contract negotiation, multi-level discount approvals, and order payments.
+ * Coordinates the commercial B2B checkout workflow. 
+ * It manages contract price negotiation, corporate discount approval workflows, and order payment processing.
  */
-public class CheckoutJourney {
-    private final String orderId;
+public class Checkout {
     private final BulkContractNegotiator negotiator;
     private final DiscountApprovalWorkflow approvalWorkflow;
-    private final OrderPaymentTransaction paymentTransaction;
+    private final Payment payment;
     private Order order;
 
-    public CheckoutJourney(
+    /**
+     * Creates a new B2B checkout coordinator linked to a unique purchase order ID, 
+     * utilizing shared channels for message communications.
+     */
+    public Checkout(
         String orderId, 
         EventSubscriber<Object> subscriberPort,
         EventPublisher<NegotiationEvent<String>> negotiationPublisher,
         EventPublisher<ApprovalEvent<String, String>> approvalPublisher,
         EventPublisher<PaymentEvent<String, Double>> paymentPublisher
     ) {
-        this.orderId = orderId;
         this.negotiator = new BulkContractNegotiator(orderId, negotiationPublisher);
         this.approvalWorkflow = new DiscountApprovalWorkflow(orderId, subscriberPort, approvalPublisher);
-        this.paymentTransaction = new OrderPaymentTransaction(orderId, subscriberPort, paymentPublisher);
+        this.payment = new Payment(orderId, subscriberPort, paymentPublisher);
     }
 
-    public CheckoutJourney(String orderId) {
-        this.orderId = orderId;
-        this.negotiator = new BulkContractNegotiator(orderId);
-        this.approvalWorkflow = new DiscountApprovalWorkflow(orderId);
-        this.paymentTransaction = new OrderPaymentTransaction(orderId);
-    }
-
+    /**
+     * Initializes a customer purchase order and registers it with the checkout coordinator.
+     */
     public Order initiateOrder(String itemId, String customerEmail, int quantity, double unitPrice, EventSubscriber<Object> subscriberPort, Warehouse warehouse) {
-        this.order = new Order(orderId, itemId, customerEmail, quantity, unitPrice, subscriberPort, warehouse);
+        this.order = new Order(itemId, customerEmail, quantity, unitPrice, subscriberPort, warehouse);
         return this.order;
     }
 
-    public Order initiateOrder(String itemId, String customerEmail, int quantity, double unitPrice, EventSubscriber<Object> subscriberPort) {
-        return initiateOrder(itemId, customerEmail, quantity, unitPrice, subscriberPort, null);
-    }
-
-    public Order initiateOrder(String itemId, String customerEmail, int quantity, double unitPrice) {
-        return initiateOrder(itemId, customerEmail, quantity, unitPrice, null, null);
-    }
-
+    /**
+     * Begins commercial price negotiation for a bulk order.
+     */
     public void startNegotiation() {
         negotiator.initiate();
     }
 
+    /**
+     * Proposes bulk purchase volume and unit pricing terms on behalf of the buyer.
+     */
     public void proposeTerms(String actorId, BulkOrderTerms terms, Instant time) {
         negotiator.proposeTerms(actorId, terms, time);
     }
 
+    /**
+     * Counter-proposes adjusted discount and volume pricing terms on behalf of the seller.
+     */
     public void counterPropose(String actorId, BulkOrderTerms terms, Instant time) {
         negotiator.counterPropose(actorId, terms, time);
     }
 
+    /**
+     * Accepts finalized negotiation terms, updating the order value and automatically 
+     * submitting the bulk volume discount for corporate approval reviews.
+     */
     public void acceptTerms(String actorId, Instant time) {
         negotiator.acceptTerms(actorId, time);
         if (order != null) {
             order.applyNegotiatedDiscount(40.0);
         }
         
-        // Direct, unified orchestration: Accept terms automatically triggers submission for approvals
-        // since they represent operations on the same logical checkout aggregate root context!
+        // Accepting negotiated contract terms automatically triggers executive review submission
         submitForDiscountApproval("sales-rep", 40.0, "Bulk contract for 50 Laptops at 40% discount", time.plusSeconds(10));
     }
 
+    /**
+     * Submits a contract discount for authorized executive review.
+     */
     public void submitForDiscountApproval(String actorId, double discountPercentage, String description, Instant time) {
         approvalWorkflow.submitForDiscountApproval(actorId, discountPercentage, description, time);
     }
 
-    public void approveDiscount(String approverId, String role, String comment, Instant time) {
-        approvalWorkflow.approveDiscount(approverId, role, comment, time);
-    }
-
-    public void authorizePayment(String actorId, double amount, Instant time) {
-        paymentTransaction.authorize(actorId, amount, time);
-    }
-
+    /**
+     * Captures and settles the finalized purchase payment amount.
+     */
     public void capturePayment(String actorId, double amount, String description, Instant time) {
-        paymentTransaction.capture(actorId, amount, description, time);
+        payment.capture(actorId, amount, description, time);
     }
 }

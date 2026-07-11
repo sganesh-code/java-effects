@@ -10,6 +10,10 @@ import io.effects.adapters.NoOpTelemetryPort;
 import io.effects.recipes.approvable.*;
 import java.time.Instant;
 
+/**
+ * Represents a corporate purchase discount approval workflow. 
+ * It evaluates pricing discount requests and escalates approvals to Sales VPs or CFOs based on volume terms.
+ */
 public class DiscountApprovalWorkflow implements ApprovableRequest<String, String, String> {
     private final String orderId;
     private final ApprovalProcess<String, String, String> approvalProcess;
@@ -17,13 +21,16 @@ public class DiscountApprovalWorkflow implements ApprovableRequest<String, Strin
     private final EventPublisher<ApprovalEvent<String, String>> publisherPort;
     private double discountPercentage;
 
+    /**
+     * Initializes a corporate discount approval workflow linked to a unique purchase order ID.
+     */
     public DiscountApprovalWorkflow(String orderId, EventSubscriber<Object> subscriberPort, EventPublisher<ApprovalEvent<String, String>> publisherPort) {
         this.orderId = orderId;
         this.subscriberPort = subscriberPort;
         this.publisherPort = publisherPort;
         this.approvalProcess = new ApprovalProcess<>(new InMemoryStateRepository<>(), publisherPort, new NoOpTelemetryPort());
         if (subscriberPort != null) {
-            subscribeToEvents();
+            setupApprovalTriggers();
         }
     }
 
@@ -31,21 +38,24 @@ public class DiscountApprovalWorkflow implements ApprovableRequest<String, Strin
         this(orderId, null, new InMemoryEventPublisher<>());
     }
 
-    private void subscribeToEvents() {
-        // RequestSubmitted -> Auto approve (Sarah and steve robots)
+    /**
+     * Configures automatic approval triggers to execute executive decision-making reviews 
+     * when high-volume contracts are submitted.
+     */
+    private void setupApprovalTriggers() {
         subscriberPort.subscribe("RequestSubmitted", rawEvent -> IO.delay(() -> {
             if (rawEvent instanceof io.effects.recipes.approvable.RequestSubmitted<?, ?> event) {
                 String ordId = event.requestId().toString();
                 String currentRequired = event.requiredAuthority().toString();
                 Instant now = event.occurredAt();
                 
-                DomainLogger.info("[CHOREOGRAPHY] DiscountApprovalWorkflow caught RequestSubmitted. Asynchronously applying decision for role: " + currentRequired);
+                DomainLogger.info("[APPROVAL] Executive review ticket submitted. Automatically evaluating policies for authority role: " + currentRequired);
                 
                 if ("SALES_VP".equals(currentRequired)) {
-                    // Automated VP Sarah approves strategic corporate accounts
+                    // Automated Sales VP Sarah automatically approves strategic high-volume contracts
                     approveDiscount("vp-sarah", "SALES_VP", "Approved volume discount - strategic corporate account.", now.plusSeconds(5));
                 } else if ("CFO".equals(currentRequired)) {
-                    // Automated CFO Steve approves
+                    // Automated CFO Steve automatically approves corporate finance requirements
                     approveDiscount("cfo-steve", "CFO", "Financially approved via automated corporate CFO policy.", now.plusSeconds(5));
                 }
             }
@@ -53,29 +63,39 @@ public class DiscountApprovalWorkflow implements ApprovableRequest<String, Strin
         })).unsafeRunSync();
     }
 
+    // --- Core Approval Operations ---
+
+    /**
+     * Submits a negotiated contract discount percentage for official executive reviews.
+     */
     public void submitForDiscountApproval(String actorId, double discountPercentage, String description, Instant time) {
-        DomainLogger.info("[APPROVAL] Discount of " + discountPercentage + "% exceeds standard auto-approval (15%). Submitting for VP & CFO approvals.");
+        DomainLogger.info("[APPROVAL] Discount of " + discountPercentage + "% exceeds standard auto-approval threshold (15%). Submitting for Sales VP & CFO reviews...");
         this.discountPercentage = discountPercentage;
         approvalProcess.register(orderId, this).unsafeRunSync();
         var res = approvalProcess.submit(orderId, actorId, description, time).unsafeRunSync();
         if (res.isLeft()) {
-            throw new RuntimeException("Submit failed: " + res.getLeft());
+            throw new RuntimeException("Approval submission failed: " + res.getLeft());
         }
-        DomainLogger.info("[APPROVAL] Submitted. Current status: " + res.getRight().status() + ". Required: " + res.getRight().requiredAuthority());
+        DomainLogger.info("[APPROVAL] Review ticket successfully submitted. Status: " + res.getRight().status() + ". Next pending reviewer: " + res.getRight().requiredAuthority());
     }
 
+    /**
+     * Registers an executive approval decision on a pending discount request.
+     */
     public void approveDiscount(String approverId, String role, String comment, Instant time) {
         var res = approvalProcess.approve(orderId, approverId, role, comment, time).unsafeRunSync();
         if (res.isLeft()) {
-            throw new RuntimeException("Approval failed: " + res.getLeft());
+            throw new RuntimeException("Executive approval failed: " + res.getLeft());
         }
         ApprovalRecord<String, String, String> record = res.getRight();
         if (record.status() == Status.APPROVED) {
-            DomainLogger.info("[APPROVAL] CFO Approved! Final status: " + record.status());
+            DomainLogger.info("[APPROVAL] Final CFO Approval cleared! Checkout discount has been fully authorized.");
         } else {
-            DomainLogger.info("[APPROVAL] " + role + " Approved. Status escalated. Next required: " + record.requiredAuthority());
+            DomainLogger.info("[APPROVAL] " + role + " Approved. Ticket escalated to next level. Pending: " + record.requiredAuthority());
         }
     }
+
+    // --- Internal Business Invariants & Policies ---
 
     @Override
     public InitialAssessment<String> evaluateInitialSubmission(Instant now) {
@@ -104,7 +124,7 @@ public class DiscountApprovalWorkflow implements ApprovableRequest<String, Strin
         if (decisionType == DecisionType.APPROVE) {
             String currentRequired = record.requiredAuthority();
             if (!currentRequired.equals(approverRole)) {
-                return Either.left("Unauthorized: Action requires authority " + currentRequired + " but approver had " + approverRole);
+                return Either.left("Review policy error: Action requires authority level " + currentRequired + " but approver had " + approverRole);
             }
 
             if ("SALES_MANAGER".equals(currentRequired)) {
