@@ -69,19 +69,14 @@ public final class RedisEventSubscriber<E> implements EventSubscriber<E> {
             });
 
             // Return active subscription handle
-            return new Subscription() {
-                @Override
-                public IO<Void> unsubscribe() {
-                    return IO.delay(() -> {
-                        try {
-                            pubSub.unsubscribe();
-                        } catch (Exception ignored) {
-                            // Catch exceptions when not bound to a real Redis connection socket in mocks
-                        }
-                        return null;
-                    });
+            return () -> IO.delay(() -> {
+                try {
+                    pubSub.unsubscribe();
+                } catch (Exception ignored) {
+                    // Catch exceptions when not bound to a real Redis connection socket in mocks
                 }
-            };
+                return null;
+            });
         });
     }
 }

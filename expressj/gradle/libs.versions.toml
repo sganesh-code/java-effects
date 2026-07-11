@@ -7,6 +7,7 @@ guava = "33.2.1-jre"
 lombok = "1.18.34"
 jedis = "5.1.2"
 jackson = "2.17.1"
+kafka = "3.7.1"
 
 [libraries]
 commons-math3 = { module = "org.apache.commons:commons-math3", version.ref = "commons-math3" }
@@ -15,3 +16,4 @@ lombok = { module = "org.projectlombok:lombok", version.ref = "lombok" }
 jedis = { module = "redis.clients:jedis", version.ref = "jedis" }
 jackson-databind = { module = "com.fasterxml.jackson.core:jackson-databind", version.ref = "jackson" }
 jackson-core = { module = "com.fasterxml.jackson.core:jackson-core", version.ref = "jackson" }
+kafka-clients = { module = "org.apache.kafka:kafka-clients", version.ref = "kafka" }

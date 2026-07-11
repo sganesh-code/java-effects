@@ -25,6 +25,7 @@ dependencies {
     implementation(libs.jedis)
     implementation(libs.jackson.databind)
     implementation(libs.jackson.core)
+    implementation(libs.kafka.clients)
 
     // Lombok Support for @ExtensionMethod
     compileOnly(libs.lombok)

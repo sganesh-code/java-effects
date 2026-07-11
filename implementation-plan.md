@@ -76,7 +76,7 @@ This implementation plan details the addition of a high-performance, non-blockin
 
 ---
 
-- [ ] **🎟️ [TICKET-003]: Implement Apache Kafka Adapter with Virtual-Thread Polling**
+- [x] **🎟️ [TICKET-003]: Implement Apache Kafka Adapter with Virtual-Thread Polling**
   - **Description:** Implement enterprise-grade Apache Kafka adapters for the publish/subscribe ports. This adapter must support partitioning, consumer groups, and manual offset committing to guarantee **At-Least-Once** processing semantics.
   - **Scope:**
     - **In scope:**
@@ -87,11 +87,16 @@ This implementation plan details the addition of a high-performance, non-blockin
     - **Out of scope:**
       - Advanced Kafka stream processing (e.g. KStreams). This port remains a clean message broker.
   - **Implementation Tasks:**
-    - [ ] Declare Kafka clients dependency in `@expressj/gradle/libs.versions.toml` (e.g., `org.apache.kafka:kafka-clients:3.7.1`).
-    - [ ] Add the dependency inside `@expressj/core/build.gradle.kts`.
-    - [ ] Create `@expressj/core/src/main/java/io/effects/adapters/kafka/KafkaEventPublisher.java` implementing `EventPublisher<E>`. It must publish serialized events to the designated topic inside referentially transparent `IO.delay(...)` blocks.
-    - [ ] Create `@expressj/core/src/main/java/io/effects/adapters/kafka/KafkaEventSubscriber.java` implementing `EventSubscriber<E>`. It must poll Kafka on a virtual thread and feed messages into the consumer handler, committing offsets manually to avoid data loss on downstream failures.
-    - [ ] Write tests under `@expressj/core/src/test/java/io/effects/adapters/kafka/KafkaPubSubTest.java` verifying publishing, consumer group subscriptions, and failure recovery.
+    - [x] Declare Kafka clients dependency in `@expressj/gradle/libs.versions.toml` (e.g., `org.apache.kafka:kafka-clients:3.7.1`).
+      - *Declared kafka-clients (3.7.1) in libs.versions.toml.*
+    - [x] Add the dependency inside `@expressj/core/build.gradle.kts`.
+      - *Imported kafka-clients dependency in core/build.gradle.kts.*
+    - [x] Create `@expressj/core/src/main/java/io/effects/adapters/kafka/KafkaEventPublisher.java` implementing `EventPublisher<E>`. It must publish serialized events to the designated topic inside referentially transparent `IO.delay(...)` blocks.
+      - *Created KafkaEventPublisher using asynchronous non-blocking producer.send callbacks bridged with IO.async.*
+    - [x] Create `@expressj/core/src/main/java/io/effects/adapters/kafka/KafkaEventSubscriber.java` implementing `EventSubscriber<E>`. It must poll Kafka on a virtual thread and feed messages into the consumer handler, committing offsets manually to avoid data loss on downstream failures.
+      - *Created KafkaEventSubscriber polling Kafka on Java 21 Virtual Threads and committing offsets manually on monadic handler success.*
+    - [x] Write tests under `@expressj/core/src/test/java/io/effects/adapters/kafka/KafkaPubSubTest.java` verifying publishing, consumer group subscriptions, and failure recovery.
+      - *Wrote KafkaPubSubTest using custom MockProducer and MockConsumer to verify end-to-end publishing, virtual-threaded subscribing, manual offset committing, and clean unsubscription.*
 
 ---
 
