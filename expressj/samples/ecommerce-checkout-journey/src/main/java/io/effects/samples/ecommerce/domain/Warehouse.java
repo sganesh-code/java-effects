@@ -9,28 +9,31 @@ import io.effects.recipes.reservable.*;
 import java.time.Instant;
 
 /**
- * First-class business object representing a physical warehouse inventory system.
- * It encapsulates and directly implements the Reservable recipe process to participate
- * natively in the inventory ledger's state transitions.
+ * Represents a physical warehouse inventory storage facility. 
+ * It is responsible for managing physical item stock, securing temporary stock holds for 
+ * pending checkouts, and finalizing inventory allocation once payment is verified.
  */
 public class Warehouse implements ReservableResource<String, Integer> {
     private final String warehouseId;
-    private final ReservationProcess<String, Integer> inventoryProcess;
     private final String itemId;
     private final int maxCapacity;
+    private final ReservationProcess<String, Integer> inventoryProcess;
 
+    /**
+     * Initializes a physical warehouse facility with a designated location identifier, 
+     * item storage description, and total maximum physical inventory storage capacity.
+     */
     public Warehouse(String warehouseId, String itemId, int capacity, EventPublisher<ReservationEvent<String, Integer>> publisher) {
         this.warehouseId = warehouseId;
         this.itemId = itemId;
         this.maxCapacity = capacity;
-        this.inventoryProcess = new ReservationProcess<String, Integer>(
-            new InMemoryStateRepository<>(), 
-            new InMemoryStateRepository<>(), 
-            publisher, 
-            new NoOpTelemetryPort()
+        this.inventoryProcess = new ReservationProcess<>(
+                new InMemoryStateRepository<>(),
+                new InMemoryStateRepository<>(),
+                publisher,
+                new NoOpTelemetryPort()
         );
         
-        // Eagerly register ourselves as the behavior provider
         this.inventoryProcess.register(itemId, this).unsafeRunSync();
     }
 
@@ -38,31 +41,42 @@ public class Warehouse implements ReservableResource<String, Integer> {
         this(warehouseId, itemId, capacity, new InMemoryEventPublisher<>());
     }
 
-    // --- High-Level Business Behaviors ---
+    // --- Core Inventory Operations ---
 
-    public Hold<String, Integer> reserveStock(String itemId, String actorId, int quantity, int ttlSeconds, Instant time) {
-        DomainLogger.info("[RESERVATION] Placing a hold on " + quantity + " " + itemId + " in warehouse: " + warehouseId);
-        var res = inventoryProcess.hold(itemId, actorId, quantity, ttlSeconds, time).unsafeRunSync();
+    /**
+     * Secures a temporary stock reservation for a specific purchase order. 
+     * Ensures that subsequent checkouts do not overbook the warehouse's physical storage capacity.
+     */
+    public Hold<String, Integer> reserveStock(String itemId, String orderId, int quantity, int ttlSeconds, Instant time) {
+        DomainLogger.info("[INVENTORY] Placing temporary stock hold on " + quantity + " units of " + itemId + " in warehouse: " + warehouseId);
+        var res = inventoryProcess.hold(itemId, orderId, quantity, ttlSeconds, time).unsafeRunSync();
         if (res.isLeft()) {
-            throw new RuntimeException("Stock hold failed: " + res.getLeft());
+            throw new RuntimeException("Inventory hold failed: " + res.getLeft());
         }
         Hold<String, Integer> hold = res.getRight();
-        DomainLogger.info("[RESERVATION] Hold acquired. Hold ID: " + hold.holdId() + ". Expires at: " + hold.expiresAt());
+        DomainLogger.info("[INVENTORY] Stock hold acquired. Hold reference ID: " + hold.holdId() + ". Expires at: " + hold.expiresAt());
         return hold;
     }
 
+    /**
+     * Finalizes a temporary stock hold into a permanent inventory allocation. 
+     * This moves the reserved stock into a finalized shipping queue.
+     */
     public Reservation<String, Integer> confirmStock(String holdId, Instant time) {
         var res = inventoryProcess.confirm(holdId, time).unsafeRunSync();
         if (res.isLeft()) {
-            throw new RuntimeException("Stock confirmation failed: " + res.getLeft());
+            throw new RuntimeException("Stock finalization failed: " + res.getLeft());
         }
         Reservation<String, Integer> reservation = res.getRight();
-        DomainLogger.info("[RESERVATION] Reservation confirmed successfully! Reservation ID: " + reservation.reservationId());
+        DomainLogger.info("[INVENTORY] Reserved stock confirmed successfully! Allocation ID: " + reservation.reservationId());
         return reservation;
     }
 
-    // --- ReservableResource Interface Implementation ---
+    // --- Internal Business Invariants & Policies ---
 
+    /**
+     * Evaluation Policy: Assesses if the warehouse has sufficient stock capacity to support a new hold request.
+     */
     @Override
     public Either<String, Hold<String, Integer>> tryHold(ResourceLedger<String, Integer> ledger, String holdId, String actorId, Integer quantity, Instant now, Instant expiresAt) {
         int currentCommitted = 0;
@@ -74,27 +88,30 @@ public class Warehouse implements ReservableResource<String, Integer> {
         }
 
         if (currentCommitted + quantity > maxCapacity) {
-            return Either.left("Insufficient warehouse stock level for item " + itemId + ". Available: " + (maxCapacity - currentCommitted));
+            return Either.left("Insufficient warehouse inventory levels for item [" + itemId + "]. Available: " + (maxCapacity - currentCommitted));
         }
 
         return Either.right(new Hold<>(holdId, actorId, itemId, quantity, expiresAt, Hold.Status.HELD));
     }
 
+    /**
+     * Evaluation Policy: Ensures that a temporary hold is still valid and has not expired before final confirmation is authorized.
+     */
     @Override
     public Either<String, Reservation<String, Integer>> tryConfirm(ResourceLedger<String, Integer> ledger, Hold<String, Integer> hold, String reservationId, Instant now) {
         if (now.isAfter(hold.expiresAt())) {
-            return Either.left("Hold has expired");
+            return Either.left("Inventory stock hold has expired and cannot be confirmed.");
         }
         return Either.right(new Reservation<>(reservationId, hold.holdId(), hold.actorId(), hold.resourceId(), hold.quantity(), now));
     }
 
     @Override
     public void onRelease(Hold<String, Integer> hold) {
-        // No-op for this simple simulation
+        // Automatically release the reserved quantity back to general stock availability on cancel.
     }
 
     @Override
     public void onExpire(Hold<String, Integer> hold) {
-        // No-op for this simple simulation
+        // Automatically release the reserved quantity back to general stock availability if the hold expires.
     }
 }
