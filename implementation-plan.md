@@ -124,7 +124,7 @@ This implementation plan details the addition of a high-performance, non-blockin
 
 ---
 
-- [ ] **🎟️ [TICKET-005]: Decouple & Choreograph Sample E-Commerce Checkout Journey**
+- [x] **🎟️ [TICKET-005]: Decouple & Choreograph Sample E-Commerce Checkout Journey**
   - **Description:** Transition the e-commerce checkout journey from a sequential, orchestrator-driven application to a decentralized, event-driven choreographed system. The domain objects (such as `LogisticsProvider` and `AssetRegistry`) will react directly to events from the broker ports, enabling true asynchronous choreography within the business context.
   - **Scope:**
     - **In scope:**
@@ -136,9 +136,15 @@ This implementation plan details the addition of a high-performance, non-blockin
     - **Out of scope:**
       - Changing core business rules or mathematical invariants of the aggregate ledgers (which remain strictly complete and encapsulated).
   - **Implementation Tasks:**
-    - [ ] Analyze the existing domain objects under `@expressj/samples/ecommerce-checkout-journey/src/main/java/io/effects/samples/ecommerce/domain/`.
-    - [ ] Refactor `LogisticsProvider` to subscribe to `HoldConfirmed` events using the `EventSubscriber` port on system startup.
-    - [ ] Refactor `AssetRegistry` to subscribe to `FulfillmentCompleted` events using the `EventSubscriber` port.
-    - [ ] Refactor `EcommerceApp.java` (specifically the simulation runner loop) to wire these subscribers on startup, then initiate the checkout flow and let messages propagate asynchronously via Redis/Kafka.
-    - [ ] Write integration tests under `@expressj/samples/ecommerce-checkout-journey/src/test/java/io/effects/samples/ecommerce/EcommerceAppEventDrivenTest.java` to verify the complete, asynchronous propagation of the checkout journey.
-    - [ ] Execute `./gradlew clean test` to ensure all existing and new tests pass without regressions.
+    - [x] Analyze the existing domain objects under `@expressj/samples/ecommerce-checkout-journey/src/main/java/io/effects/samples/ecommerce/domain/`.
+      - *Analyzed Warehouse, LogisticsProvider, Order, and AssetRegistry to establish asynchronous trigger opportunities.*
+    - [x] Refactor `LogisticsProvider` to subscribe to `HoldConfirmed` events using the `EventSubscriber` port on system startup.
+      - *Refactored LogisticsProvider to automatically initiate shipment and allocate items asynchronously upon receiving HoldConfirmed events.*
+    - [x] Refactor `AssetRegistry` to subscribe to `FulfillmentCompleted` events using the `EventSubscriber` port.
+      - *Refactored AssetRegistry to automatically register owner and grant PREMIUM SLA warranty upon receiving FulfillmentCompleted events.*
+    - [x] Refactor `EcommerceApp.java` (specifically the simulation runner loop) to wire these subscribers on startup, then initiate the checkout flow and let messages propagate asynchronously via Redis/Kafka.
+      - *Refactored EcommerceApp to initialize a shared InMemoryEventSubscriber, mapping type-safe publisher/subscriber channels for fully choreographed checkout simulation.*
+    - [x] Write integration tests under `@expressj/samples/ecommerce-checkout-journey/src/test/java/io/effects/samples/ecommerce/EcommerceAppEventDrivenTest.java` to verify the complete, asynchronous propagation of the checkout journey.
+      - *Wrote EcommerceAppEventDrivenTest verifying successful execution of fully choreographed e-commerce checkout flow.*
+    - [x] Execute `./gradlew clean test` to ensure all existing and new tests pass without regressions.
+      - *Executed gradlew clean test; verified that 100% of all existing and new tests pass cleanly.*
