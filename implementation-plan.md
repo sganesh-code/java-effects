@@ -100,7 +100,7 @@ This implementation plan details the addition of a high-performance, non-blockin
 
 ---
 
-- [ ] **🎟️ [TICKET-004]: Design and Implement the Observable Business Recipe**
+- [x] **🎟️ [TICKET-004]: Design and Implement the Observable Business Recipe**
   - **Description:** Formalize the `Observable` collaboration recipe, as conceptualized in the research notes, under the new package `io.effects.recipes.observable`. This provides business-level grammar for consumers to declare event-driven, reactive subscriptions using filters and notification policies.
   - **Scope:**
     - **In scope:**
@@ -110,13 +110,17 @@ This implementation plan details the addition of a high-performance, non-blockin
     - **Out of scope:**
       - Directly altering existing recipe processes; other recipes will interact strictly through the unified publish/subscribe ports.
   - **Implementation Tasks:**
-    - [ ] Read `@expressj/docs/oo_object_recipe_research_notes.md` (specifically Sections 9 & 10) to align with the conceptual blueprint for the `Observable` recipe.
-    - [ ] Create interface `@expressj/core/src/main/java/io/effects/recipes/observable/ObservableRequest.java` and record/class `@expressj/core/src/main/java/io/effects/recipes/observable/ObservableProcess.java`.
-    - [ ] Implement core methods:
-      - `subscribe(String topic, SubscriberID subscriberId, SubscriptionFilter filter)`: Declares subscriber intent.
-      - `publish(E event)`: Distributes events.
-    - [ ] Design replaceable policy objects: `SubscriptionFilter` (evaluates predicates on events) and `NotificationPolicy` (determines error retry/escalation when a subscriber notify fails).
-    - [ ] Write comprehensive unit and invariant tests under `@expressj/core/src/test/java/io/effects/recipes/observable/ObservableRecipeTest.java` verifying filtering, multi-subscriber notifications, and concurrency safety.
+    - [x] Read `@expressj/docs/oo_object_recipe_research_notes.md` (specifically Sections 9 & 10) to align with the conceptual blueprint for the `Observable` recipe.
+      - *Read Sections 9 & 10 of research notes detailing roles, messages, and invariants of the Observable/Subscription recipe.*
+    - [x] Create interface `@expressj/core/src/main/java/io/effects/recipes/observable/ObservableRequest.java` and record/class `@expressj/core/src/main/java/io/effects/recipes/observable/ObservableProcess.java`.
+      - *Created ObservableRequest interface, ObservableProcess orchestrator, ObservableLedger aggregate, and related events under io.effects.recipes.observable.*
+    - [x] Implement core methods:
+      - `subscribe(ID observableId, S subscriberId, String topic, Instant now)` and event-driven, reactive routing:
+      - *Implemented subscribe, unsubscribe, and broker event-routing methods in ObservableProcess to automatically deliver events to active subscribers.*
+    - [x] Design replaceable policy objects: `SubscriptionFilter` (evaluates predicates on events) and `NotificationPolicy` (determines error retry/escalation when a subscriber notify fails).
+      - *Designed behavioral evaluation policies checkSubscriptionPermission and shouldDeliver inside the ObservableRequest interface to preserve object encapsulation.*
+    - [x] Write comprehensive unit and invariant tests under `@expressj/core/src/test/java/io/effects/recipes/observable/ObservableRecipeTest.java` verifying filtering, multi-subscriber notifications, and concurrency safety.
+      - *Wrote ObservableRecipeTest verifying permission checks, priority filter routing, multi-subscriber event routing, and clean unsubscription.*
 
 ---
 
