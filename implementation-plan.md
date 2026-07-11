@@ -52,7 +52,7 @@ This implementation plan details the addition of a high-performance, non-blockin
 
 ---
 
-- [ ] **🎟️ [TICKET-002]: Implement Redis Pub/Sub & Redis Streams Adapters**
+- [x] **🎟️ [TICKET-002]: Implement Redis Pub/Sub & Redis Streams Adapters**
   - **Description:** Implement high-performance, non-blocking Redis adapters for event publication and subscription. We will support both lightweight Redis Pub/Sub (for simple notifications) and robust, persistent Redis Streams (with consumer groups) for enterprise reliability.
   - **Scope:**
     - **In scope:**
@@ -63,11 +63,16 @@ This implementation plan details the addition of a high-performance, non-blockin
     - **Out of scope:**
       - Kafka adapters (handled in TICKET-003).
   - **Implementation Tasks:**
-    - [ ] Declare Redis client dependency in `@expressj/gradle/libs.versions.toml` (e.g., `redis.clients:jedis:5.1.2` or `io.lettuce:lettuce-core:6.3.2.RELEASE`).
-    - [ ] Import the dependency inside `@expressj/core/build.gradle.kts`.
-    - [ ] Create `@expressj/core/src/main/java/io/effects/adapters/redis/RedisEventPublisher.java` implementing `EventPublisher<E>`. It must serialize events to JSON (using a serializer like `JacksonStateSerializer`) and publish them to a Redis channel or Stream.
-    - [ ] Create `@expressj/core/src/main/java/io/effects/adapters/redis/RedisEventSubscriber.java` implementing `EventSubscriber<E>`. It must run a long-running polling/subscription listener loop on Java 21 Virtual Threads, executing incoming messages inside the consumer's monadic `IO` handler.
-    - [ ] Write integration/unit tests under `@expressj/core/src/test/java/io/effects/adapters/redis/RedisPubSubTest.java` utilizing a mock Jedis/Lettuce client or Testcontainers to verify end-to-end event propagation.
+    - [x] Declare Redis client dependency in `@expressj/gradle/libs.versions.toml` (e.g., `redis.clients:jedis:5.1.2` or `io.lettuce:lettuce-core:6.3.2.RELEASE`).
+      - *Declared jedis (5.1.2) and jackson (2.17.1) dependencies in libs.versions.toml.*
+    - [x] Import the dependency inside `@expressj/core/build.gradle.kts`.
+      - *Imported jedis, jackson-databind, and jackson-core dependencies into core/build.gradle.kts.*
+    - [x] Create `@expressj/core/src/main/java/io/effects/adapters/redis/RedisEventPublisher.java` implementing `EventPublisher<E>`. It must serialize events to JSON (using a serializer like `JacksonStateSerializer`) and publish them to a Redis channel or Stream.
+      - *Created RedisEventPublisher implementing EventPublisher<E> which serializes events to JSON with a polymorphic envelope and publishes to Redis.*
+    - [x] Create `@expressj/core/src/main/java/io/effects/adapters/redis/RedisEventSubscriber.java` implementing `EventSubscriber<E>`. It must run a long-running polling/subscription listener loop on Java 21 Virtual Threads, executing incoming messages inside the consumer's monadic `IO` handler.
+      - *Created RedisEventSubscriber implementing EventSubscriber<E> which runs blocking Jedis subscription loops on Java 21 virtual threads.*
+    - [x] Write integration/unit tests under `@expressj/core/src/test/java/io/effects/adapters/redis/RedisPubSubTest.java` utilizing a mock Jedis/Lettuce client or Testcontainers to verify end-to-end event propagation.
+      - *Wrote RedisPubSubTest using a custom mock Jedis client to test end-to-end publishing, virtual-threaded subscribing, and graceful unsubscription.*
 
 ---
 

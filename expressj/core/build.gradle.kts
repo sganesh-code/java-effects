@@ -22,6 +22,9 @@ dependencies {
 
     // This dependency is used internally, and not exposed to consumers on their own compile classpath.
     implementation(libs.guava)
+    implementation(libs.jedis)
+    implementation(libs.jackson.databind)
+    implementation(libs.jackson.core)
 
     // Lombok Support for @ExtensionMethod
     compileOnly(libs.lombok)
