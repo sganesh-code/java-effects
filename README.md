@@ -1,202 +1,82 @@
-# 🚀 expressj: Pure Object-Collaboration Domain Recipes for Java
+# 🚀 expressj: Collaborative Business Recipes for Rapid Prototyping
 
-`expressj` is a lightweight, high-performance, and language-native Java library of **10 non-anemic object-collaboration recipes** designed for rapid business prototyping. 
+`expressj` is a lightweight, high-performance, and language-native Java library providing core business logic as reusable, type-safe **"Recipes"** (collaboration protocols). 
 
-By enforcing a strict separation between a **Pure Synchronous Domain Core** and a **Monadic Lazy Shell**, `expressj` allows engineers to prototype, model, and verify complex business rules completely isolated from infrastructure, environments, databases, and side-effect distractions.
+By separating high-level business rules from low-level infrastructure, `expressj` enables teams to rapidly identify, model, and deploy complex business workflows completely isolated from the details of databases, message brokers, and execution environments.
 
 ---
 
-## 🏛️ Core Philosophy: Separating Domain from Distraction
+## 🏛️ Core Philosophy: Focused Business Prototyping
 
-In traditional Java enterprise architectures (e.g., Spring, Hibernate, Jakarta), business logic is typically implemented in "anemic" service layers. These service classes are tightly coupled to active databases, framework annotations, transaction managers, and asynchronous thread pools. This makes unit testing incredibly slow, introduces massive mock setup boilerplate (Mockito), and makes the core logic highly fragile.
+In traditional software development, business logic is frequently coupled with database transactions, web endpoints, and threading code. This introduces significant complexity and makes systems difficult to adapt. `expressj` completely eliminates three classic enterprise development pitfalls:
 
-`expressj` solves this by dividing your application into two distinct layers:
+1. **Infrastructure Leakage:** In traditional architectures, database connections, framework annotations (such as `@Transactional`), SQL queries, and networking libraries creep directly into core business rules. This muddies domain boundaries and makes the business logic fragile. `expressj` keeps business rules 100% pure, synchronous, and side-effect-free.
+2. **Abstractions & Maintenance Barriers:** Software teams often reinvent the wheel when designing coordination logic (like managing reservations, approval escalation paths, or financial transactions). This results in custom, tightly coupled "spaghetti" code that is extremely hard to extend. `expressj` provides these core collaborative workflows as pre-built, mathematically sound, reusable business recipes.
+3. **Environment Portability Barriers:** Porting business logic to work with new environments—such as migrating from a lightweight local test runner to a production Spring Boot microservice, or changing messaging channels from in-memory mocks to **Apache Kafka** or **Redis Streams**—typically requires a massive rewrite. With `expressj`'s Port and Adapter design, the core business rules remain completely untouched while you swap infrastructure adapters seamlessly.
+
+---
+
+## 🏛️ Hexagonal Portability: Separating Domain from Infrastructure
+
+`expressj` is built natively on Hexagonal (Ports & Adapters) principles. The core business rules (Recipes) have zero knowledge of how data is persisted or how messages are physically routed:
 
 ```text
        ┌────────────────────────────────────────────────────────┐
-       │             MONADIC SHELL (Infrastructure)             │
+       │             EXTERNAL ADAPTERS (Infrastructure)         │
        │                                                        │
-       │  • Evaluates on Virtual Threads (Asynchronous/Lazy)   │
-       │  • Manages StateRepositories, EventPublishers          │
-       │  • Handles logging, telemetry and durations metrics    │
+       │  • Relational DBs (PostgreSQL) / Key-Value (Redis)     │
+       │  • Messaging Brokers (Apache Kafka / Redis Streams)    │
+       │  • Local Test Runners (In-Memory Stubs)                │
        └──────────────────────────┬─────────────────────────────┘
-                                  │ (Atomic Double Dispatch)
+                                  │ (Plugs into Ports)
                                   ▼
        ┌────────────────────────────────────────────────────────┐
-       │             PURE DOMAIN CORE (Synchronous)             │
+       │             CORE BUSINESS RECIPES (Pure Domain)        │
        │                                                        │
-       │  • Pure deterministic functions returning Either<S,V>  │
-       │  • Zero knowledge of SQL, frameworks, or concurrency    │
-       │  • 100% testable in milliseconds without any mocks     │
+       │  • Declarative collaboration state transitions         │
+       │  • Unified business policies (no getters/setters)      │
+       │  • Independent of frameworks, SQL, or networks         │
        └────────────────────────────────────────────────────────┘
 ```
 
-1. **The Pure Domain Core (Synchronous & Side-Effect Free):** Your business rules, state transitions, and validation invariants reside inside pure domain objects implementing the `expressj` request interfaces. These classes are 100% synchronous, getter-free, and side-effect-free. They do not know where data is stored or how threads are managed; they simply evaluate incoming proposals against a chronological state ledger and return deterministic `Either<String, Result>` values.
-2. **The Monadic Shell (Lazy, Concurrent & Port-Aware):** The framework's process managers (e.g., `PayableProcess`, `ReservationProcess`) coordinate database lookups, thread shifts, event publications, and metric recordings. They wrap these side-effects inside a lightweight, lazy monadic `IO` shell, guaranteeing atomic state updates and strict referential transparency.
+By defining clean, abstract **Ports** (such as `EventPublisher`, `EventSubscriber`, and `StateRepository`), `expressj` lets you swap infrastructure **Adapters** based on individual application requirements. 
+
+For instance, during local development and rapid prototyping, you can run your entire business workflow using **In-Memory adapters** to get sub-millisecond feedback. When deploying to production, you can configure the exact same domain code to run on a high-throughput, enterprise-scale **Apache Kafka** cluster or a persistent **Redis Streams** pipeline simply by changing your configuration.
 
 ---
 
-## 🌟 Featured Recipe Deep Dives
+## ⚡ Rapid Development: Model High-Level, Delegate Low-Level
 
-To see how `expressj` separates concerns while maintaining massive adaptability across entirely different business domains, let's explore two of our most widely applicable recipes: `Approvable` and `Reservable`.
+`expressj` accelerates software delivery by allowing developers to focus on identifying, mapping, and modeling high-level business concepts, while delegating low-level state transitions and system invariants to the library's recipes:
 
----
-
-### 🏛️ Recipe 1: `Approvable` (Workflow Authorization & Escalation)
-
-The `Approvable` recipe coordinates any multi-step validation workflow where a request, document, or transaction requires review, routing, sequential approvals, escalations, or rejections from various organizational roles.
-
-#### What the Framework Orchestrates (Infrastructure)
-* **Monadic State Management:** Safely reads/writes the current state of an `ApprovalRecord` from the injected `StateRepository` inside lazy `IO` computations.
-* **Chronological Ledgers:** Maintains a sequential, immutable audit history of every submission, approval, rejection, and escalation comment.
-* **Event Publication:** Emits rich occurrences (`RequestSubmitted`, `RequestApproved`, `RequestRejected`, `RequestEscalated`) only upon successful state commits.
-* **Telemetry Ports:** Records operational successes, failures, and execution latencies automatically.
-
-#### What the Consumer Controls (Pure Business Logic)
-The developer implements the pure `ApprovableRequest<ID, A, C>` interface:
-* `evaluateInitialSubmission(Instant now)`: Evaluates a new request. You write pure logic to decide if the item is instantly `APPROVED` (auto-approval path) or starts as `PENDING` with a specific initial authority role (`A`) required.
-* `evaluateDecision(record, approverId, approverRole, decisionType, comment, now)`: Evaluates a review action. You control the state machine by deciding if the approver has the correct authority, if the request is fully finalized, or if it must be **escalated** to a higher authority (e.g., Escalating `MANAGER` ➔ `CFO`).
-
-#### Multi-Domain Adaptability Examples
-* **FinTech (Corporate Expense Routing):**
-  - **Authority (`A`):** `MANAGER`, `VP_FINANCE`, `CFO`.
-  - **Logic:** Expenses `< $1,000` auto-approve. Expenses `[$1,000, $10,000)` require `MANAGER` approval. Expenses `>= $10,000` require `MANAGER` approval, which then auto-escalates to `VP_FINANCE` and finally to the `CFO` for a triple co-sign.
-* **Healthcare (Surgical Procedure Requests):**
-  - **Authority (`A`):** `ATTENDING_PHYSICIAN`, `CHIEF_OF_SURGERY`, `ANESTHESIOLOGIST`.
-  - **Logic:** Routine clinical requests auto-approve. High-risk major procedures require the `ATTENDING_PHYSICIAN` to submit, the `CHIEF_OF_SURGERY` to authorize, and finally an `ANESTHESIOLOGIST` to sign off.
+* **High-Level Modeling (Your Focus):** You spend your time defining corporate pricing policies, carrier dispatch rules, executive review requirements, and warranty SLA criteria.
+* **Low-Level Execution (Delegated to Recipes):** The recipes automatically handle concurrency locks, chronological state ledger auditing, expiration timelines (TTLs), transactional guarantees, and cross-departmental message routing loops in a safe, non-blocking environment.
 
 ---
 
-### 🔒 Recipe 2: `Reservable` (Scarce Capacity Holds & Evictions)
+## 📦 Supported Business Recipes Catalog
 
-The `Reservable` recipe coordinates the temporary lock, countdown, confirmation, or release of a scarce, finite resource under high concurrent traffic, preventing double-allocations or capacity leakage.
+`expressj` supports a rich catalog of collaborative business recipes representing standard workflows across commercial applications:
 
-#### What the Framework Orchestrates (Infrastructure)
-* **Concurrency Protection:** Wraps pool checks in thread-safe, atomic transactions, shielding you from race conditions.
-* **Automatic Expiry (TTL):** Automatically tracks hold durations. If a claim is not confirmed before its expiration timestamp (`now.isAfter(expiresAt)`), the process manager automatically evicts the hold and reclaims capacity.
-* **Idempotency Safeguards:** Guarantees that confirming or releasing an already confirmed, expired, or released hold yields identical, repeatable success/failure blocks without duplicate state mutation.
-
-#### What the Consumer Controls (Pure Business Logic)
-The developer implements the pure `ReservableResource<ID, Q>` interface:
-* `tryHold(ledger, holdId, actorId, quantity, now, expiresAt)`: Determines if there is sufficient uncommitted capacity to satisfy the lock. You define what "capacity" means (integers, float limits, vCPUs, physical space) and how active holds/reservations are mathematically aggregated.
-* `tryConfirm(ledger, hold, reservationId, now)`: Asserts whether a hold is still valid and can be permanently converted into a reservation.
-* `onRelease(hold)` & `onExpire(hold)`: Optional callback hooks allowing you to trigger notifications (e.g. sending a cart abandonment email) when holds expire.
-
-#### Multi-Domain Adaptability Examples
-* **E-Commerce (Warehouse Stock Allocation):**
-  - **Quantity (`Q`):** `Integer` representing SKU unit counts.
-  - **Logic:** When an item is added to a cart, it acquires a 10-minute inventory hold. If checkout succeeds, the hold is confirmed to permanently subtract inventory. If the timer expires, the units automatically return to the available stock pool.
-* **SaaS / Cloud Computing (vCPU Instance Allocation):**
-  - **Quantity (`Q`):** `Integer` representing requested virtual cores.
-  - **Logic:** Before spinning up a virtual container, a 3-minute host hold is placed. Upon container initialization success, the cores are permanently reserved to that host node. If deployment fails, cores are instantly reclaimed.
-
----
-
-## 📦 The 10 Domain Recipes Catalog
-
-`expressj` includes 10 fully implemented, production-ready recipe processes:
-
-| Recipe | Business Purpose | Standard State Transitions |
+| Recipe Name | Core Business Algebra & Messages | Real-World Business Scenario / Example |
 | :--- | :--- | :--- |
-| **`Negotiable`** | Multi-party contract bargaining and terms bidding. | `INITIAL` ➔ `OFFERED` ➔ `COUNTERED` ➔ `ACCEPTED` / `WITHDRAWN` |
-| **`Approvable`** | Hierarchical workflow validations and sequential reviews. | `PENDING` ➔ `APPROVED` / `REJECTED` / `ESCALATED` |
-| **`Payable`** | Financial transactions, authorizations, and settlements. | `INITIAL` ➔ `AUTHORIZED` ➔ `CAPTURED` ➔ `REFUNDED` / `REVERSED` |
-| **`Reservable`** | Temporary capacity locks, TTL evictions, and confirms. | `HELD` ➔ `CONFIRMED` / `RELEASED` / `EXPIRED` |
-| **`Fulfillable`** | Logistics allocation, dispatch tracking, and delivery. | `INITIAL` ➔ `ALLOCATING` ➔ `PACKAGING` ➔ `DISPATCHED` ➔ `COMPLETED` |
-| **`Ownable`** | Legal asset registration, authorization, and transfers. | `UNASSIGNED` ➔ `ASSIGNED` ➔ `TRANSFERRED` / `REVOKED` |
-| **`Entitleable`**| Role permissions, security checks, and capability checks. | `REVOKED` ➔ `GRANTED` ➔ `CHECKED` |
-| **`Meterable`** | High-performance telemetry aggregation and price rating. | `STARTED` ➔ `RECORDED` ➔ `RATED` (produces Rated Invoice) |
-| **`Schedulable`**| Clock-driven cron jobs, rescheduling, and cancellations.| `SCHEDULED` ➔ `RESCHEDULED` ➔ `FIRED` / `CANCELLED` |
-| **`Auditable`** | Chronological SHA-256 secure, tamper-evident log replays.| `INITIAL` ➔ `RECORDED` ➔ `REPLAYED` |
+| **1. Negotiable** | `initiate`, `makeOffer`, `makeCounter`, `accept` | **B2B Bulk Pricing Contract:** A corporate buyer and sales system negotiate volume-based discount pricing terms until a mutually accepted contract is settled. |
+| **2. Approvable** | `submit`, `approve`, `reject`, `escalate` | **Corporate Expense Approval:** Submitting a high-value purchase discount request that requires sequential approvals and automatic escalations (e.g., Sales VP $\rightarrow$ CFO). |
+| **3. Payable** | `authorize`, `capture`, `reverse`, `refund` | **E-Commerce Billing Settlement:** Pre-authorizing customer credit on their corporate account and capturing/settling the funds once the order has been dispatched. |
+| **4. Reservable** | `hold`, `confirm`, `release`, `expire` | **Warehouse Stock Reservation:** Securing temporary holds on physical stock during checkout. Holds automatically expire and return to inventory if checkout isn't completed. |
+| **5. Fulfillable** | `initiate`, `allocate`, `package`, `dispatch`, `complete` | **Logistics shipping packages:** Allocating items at warehouse packing stations, boxing and labeling them, and tracking shipping carriers through final delivery. |
+| **6. Ownable** | `register`, `assign`, `transfer` | **Corporate Asset Assignment:** Logging a physical device's serial number (e.g. laptop) and assigning or transferring its ownership to specific corporate employee accounts. |
+| **7. Entitleable** | `grant`, `check`, `revoke` | **Warranty Support SLA Coverage:** Assigning premium support SLA access levels to customer assets and verifying maintenance session authorization boundaries. |
+| **8. Observable** | `register`, `subscribe`, `unsubscribe`, `publish` | **Cross-Departmental Messaging Broker:** Allowing different corporate systems (Warehouse, Shipping, Billing) to subscribe to events and react asynchronously as a choreographed pipeline. |
 
 ---
 
-## 🚀 Rapid Prototyping: B2B E-Commerce Checkout Journey
+## 🔄 Compare & Contrast: Traditional vs. expressj
 
-Because all 10 recipes are completely decoupled, they do not share state or depend on one another. Instead, they are composed together **sequentially at the application boundary** using simple monad executions.
-
-Our included sample application (`samples:ecommerce-checkout-journey`) showcases a complete **B2B Bulk Checkout & SLA Support Lifecycle** workflow:
-
-```text
-                       🚀 START CHECKOUT JOURNEY
-                                    │
-    1. [Negotiable]   ────► Bargain custom bulk Laptop price & counts.
-                                    │
-    2. [Approvable]   ────► Route 40% discount for Sales VP & CFO co-sign.
-                                    │
-    3. [Payable]      ────► Authorize $45,000 corporate purchase total.
-                                    │
-    4. [Reservable]   ────► Hold 50 laptops in West-Region warehouse pool.
-                                    │
-    5. [Fulfillable]  ────► Allocate, box, FedEx ship, and deliver laptops.
-                                    │
-    6. [Ownable]      ────► Register asset ownership to buyer-admin.
-                                    │
-    7. [Entitleable]  ────► Grant PREMIUM SLA warranty clearances.
-                                    │
-    8. [Meterable]    ────► Continuously log diagnostic support calls.
-                                    │
-    9. [Schedulable]  ────► Daily cron runs, rates support overages.
-                                    │
-   10. [Auditable]    ────► Replay chronological SHA-256 secure audit trails.
-                                    │
-                       🏁 JOURNEY COMPLETED SUCCESSFULLY!
-```
-
----
-
-## 🛠️ Getting Started & Verification Guide
-
-### Prerequisites
-* Java Development Kit (JDK) 21 or higher.
-* Gradle (gradle-wrapper is included).
-
-### 1. Build and Compile
-Compile both the core library and the sample subproject:
-```bash
-./gradlew compileJava compileTestJava
-```
-
-### 2. Run the E-Commerce Checkout Simulation
-Execute our interactive console-based B2B checkout simulation:
-```bash
-./gradlew :samples:ecommerce-checkout-journey:run
-```
-This runs the 10-step monadic workflow and prints beautifully structured, colorized terminal logs explaining exactly how the recipes collaborate in real-time.
-
-### 3. Run the Test Suites
-Run all unit and integration tests across the entire workspace (including both the core recipes and the sample verification suites):
-```bash
-./gradlew test
-```
-The test reports are automatically generated under `core/build/reports/tests/test/index.html` and `samples/ecommerce-checkout-journey/build/reports/tests/test/index.html`.
-
----
-
-## 📂 Project Structure
-
-```text
-expressj/
-├── core/                                 # The expressj Core Library
-│   └── src/
-│       ├── main/java/io/effects/         
-│       │   ├── Either.java               # Type-safe Left/Right disjoint union
-│       │   ├── IO.java                   # Lazy concurrent functional Monad
-│       │   ├── ports/                    # StateRepository, EventPublisher, Telemetry ports
-│       │   ├── adapters/                 # In-Memory & No-Op infrastructure implementations
-│       │   └── recipes/                  # The 10 monadic Process Managers
-│       └── test/java/io/effects/         # Comprehensive test coverage of all 10 recipes
-│
-└── samples/
-    └── ecommerce-checkout-journey/       # Standalone B2B checkout demonstration subproject
-        └── src/
-            ├── main/java/.../ecommerce/  
-            │   ├── EcommerceApp.java     # The 10-recipe Orchestration Engine & simulation main
-            │   └── [recipe]/             # Reusable domain adapters (BulkOrderApproval, OrderPayment, etc.)
-            └── test/java/.../ecommerce/  # End-to-end integration verification test suite
-```
-
----
-
-## 📝 License
-This project is licensed under the Apache 2.0 License. See the `LICENSE` file for details.
+| Architectural Aspect | Traditional Enterprise Architecture (Spring / Hibernate / JPA Services) | expressj Architectural Design (Pure Collaborative Recipes) |
+| :--- | :--- | :--- |
+| **Domain Model** | **Anemic Models:** Driven by database schemas with passive data-holding objects (getters/setters). Pure business logic is scattered across procedural transaction service classes. | **Rich Behavioral Models:** Focuses strictly on object-collaboration and business behaviors. Pure domain rules are encapsulated inside getter-free, non-anemic classes. |
+| **Infrastructure Coupling** | **High Coupling:** Business logic is directly tied to database operations, active connection pools, framework annotations, and third-party network libraries. | **Complete Separation:** Business logic is completely isolated. Physical storage systems, brokers, and networks are plugged in as external adapters via abstract ports. |
+| **Testing Feedback Loop** | **Slow and Brittle:** Verifying basic discount calculations requires spinning up heavy frameworks, mock configurations (Mockito), or Testcontainers databases. | **Instantaneous:** 100% of your business rules and state transitions can be verified in milliseconds using standard, zero-dependency unit tests. |
+| **Concurrency & State Safety** | **Complex & Error-Prone:** Developers must manually manage thread locks, pessimistic/optimistic db locking, or distributed mutexes, which frequently causes deadlocks. | **Guaranteed by Design:** Recipes mathematically guarantee thread safety and chronological state transitions inside the shell, protecting the domain core. |
+| **Infrastructure Portability** | **Locked-In:** Migrating from a relational DB (PostgreSQL) to a NoSQL DB (DynamoDB), or switching from RabbitMQ to Apache Kafka, requires rewriting the entire application. | **Plug-And-Play:** The exact same business logic runs untouched; changing infrastructure only requires writing or selecting a small, isolated external adapter. |
