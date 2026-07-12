@@ -43,14 +43,14 @@ public final class ApprovalRecord<ID, A, C> {
     }
 
     /**
-     * Records a decision and transitions the state of the record internally.
+     * Records a decision and transitions the state of the register internally.
      */
     private synchronized void recordDecision(ApprovalDecision<A, C> decision, Status nextStatus, A nextRequiredAuthority) {
         Objects.requireNonNull(decision);
         Objects.requireNonNull(nextStatus);
 
         if (isTerminal()) {
-            throw new IllegalStateException("Cannot record a decision on a terminal approval request: " + requestId);
+            throw new IllegalStateException("Cannot register a decision on a terminal approval request: " + requestId);
         }
 
         history.add(decision);
@@ -59,7 +59,7 @@ public final class ApprovalRecord<ID, A, C> {
     }
 
     /**
-     * Behavioral Factory: Evaluates initial submission, builds the record, and produces the initial event.
+     * Behavioral Factory: Evaluates initial submission, builds the register, and produces the initial event.
      */
     public static <ID, A, C> Either<String, TransitionResult<ApprovalRecord<ID, A, C>, ApprovalEvent<ID, A>>> submit(
         ID requestId, 

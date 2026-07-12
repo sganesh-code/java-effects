@@ -64,7 +64,7 @@ public final class MeterLedger<ID, U> {
         Objects.requireNonNull(now);
 
         if (status != Status.ACTIVE) {
-            return Either.left("Cannot record usage: billing meter is not ACTIVE (current status: " + status + ")");
+            return Either.left("Cannot register usage: billing meter is not ACTIVE (current status: " + status + ")");
         }
 
         // Domain validation (double dispatch)

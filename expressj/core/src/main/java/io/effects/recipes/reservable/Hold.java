@@ -3,7 +3,7 @@ package io.effects.recipes.reservable;
 import java.time.Instant;
 
 /**
- * An immutable record representing a temporary claim on a scarce resource.
+ * An immutable register representing a temporary claim on a scarce resource.
  */
 public record Hold<ID, Q>(
     String holdId,

@@ -43,7 +43,7 @@ public final class ScheduleLedger<ID, T> {
         Objects.requireNonNull(nextStatus);
 
         if (isTerminal()) {
-            throw new IllegalStateException("Cannot record a step on a terminal schedule ledger: " + occurrenceId);
+            throw new IllegalStateException("Cannot register a step on a terminal schedule ledger: " + occurrenceId);
         }
 
         this.history.add(step);

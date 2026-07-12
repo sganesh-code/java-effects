@@ -36,7 +36,7 @@ public final class ResourceLedger<ID, Q> {
     }
 
     /**
-     * Double Dispatch: Attempt to record a hold synchronously.
+     * Double Dispatch: Attempt to register a hold synchronously.
      */
     public synchronized Either<String, Hold<ID, Q>> recordHold(
         Hold<ID, Q> hold, 

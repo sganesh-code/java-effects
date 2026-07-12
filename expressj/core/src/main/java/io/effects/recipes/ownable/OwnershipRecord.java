@@ -32,7 +32,7 @@ public final class OwnershipRecord<ID, O> {
     }
 
     /**
-     * Records an ownership change and transitions the state of the record internally.
+     * Records an ownership change and transitions the state of the register internally.
      */
     private synchronized void recordTransfer(OwnershipStep<O> step, O nextOwner) {
         Objects.requireNonNull(step);

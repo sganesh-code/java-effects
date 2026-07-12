@@ -129,7 +129,7 @@ public final class MeterableProcess<ID, U, R> {
 
                 return repository.save(accountId, ledger)
                     .flatMap(v -> publisher.publish(event))
-                    .flatMap(v -> telemetry.recordSuccess("meterable", accountId.toString() + ":record"))
+                    .flatMap(v -> telemetry.recordSuccess("meterable", accountId.toString() + ":register"))
                     .flatMap(v -> telemetry.recordDuration("meterable", accountId.toString(), System.currentTimeMillis() - startTime))
                     .map(v -> Either.<String, UsageStep<U>>right(step));
             })

@@ -41,7 +41,7 @@ public final class PaymentLedger<ID, M> {
         Objects.requireNonNull(nextStatus);
 
         if (isTerminal()) {
-            throw new IllegalStateException("Cannot record a transaction on a terminal payment ledger: " + paymentId);
+            throw new IllegalStateException("Cannot register a transaction on a terminal payment ledger: " + paymentId);
         }
 
         this.history.add(step);

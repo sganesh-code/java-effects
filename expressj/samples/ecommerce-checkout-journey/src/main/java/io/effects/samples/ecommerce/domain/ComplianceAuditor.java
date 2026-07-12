@@ -23,7 +23,7 @@ public class ComplianceAuditor implements AuditableRequest<String, AuditEntry, A
     }
 
     public void record(String actorId, AuditEntry entry, Instant time) {
-        var res = auditProcess.record(orderId, actorId, entry, time).unsafeRunSync();
+        var res = auditProcess.register(orderId, actorId, entry, time).unsafeRunSync();
         if (res.isLeft()) {
             throw new RuntimeException("Audit recording failed: " + res.getLeft());
         }

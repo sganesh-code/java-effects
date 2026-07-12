@@ -213,7 +213,7 @@ class ApprovalRecipeTest {
         assertTrue(tryApprove.isLeft());
         assertTrue(tryApprove.getLeft().contains("Cannot approve a rejected request"));
 
-        // Idempotency: Re-rejecting returns identical terminal record success
+        // Idempotency: Re-rejecting returns identical terminal register success
         Either<String, ApprovalRecord<String, String, String>> reReject = process.reject("rep-004", "mgr-C", "MANAGER", "Chair too expensive", t0.plusSeconds(30)).unsafeRunSync();
         assertTrue(reReject.isRight());
         assertEquals(record.history().size(), reReject.getRight().history().size());

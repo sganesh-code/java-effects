@@ -21,7 +21,7 @@ public interface ApprovableRequest<ID, A, C> {
 
     /**
      * Behavioral Message: Evaluates a decision (e.g. approve, reject, escalate) against current rules.
-     * Receives the approval record (state ledger) and current action context to decide
+     * Receives the approval register (state ledger) and current action context to decide
      * the next status and next required authority.
      */
     Either<String, NextStep<A>> evaluateDecision(

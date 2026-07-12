@@ -65,17 +65,17 @@ class AuditableRecipeTest {
         process.initiate("doc-1").unsafeRunSync();
 
         // Fails because appended text is blank
-        Either<String, AuditStep<EditAction>> badRecord = process.record("doc-1", "user-A", new EditAction("  ", 1), t0).unsafeRunSync();
+        Either<String, AuditStep<EditAction>> badRecord = process.register("doc-1", "user-A", new EditAction("  ", 1), t0).unsafeRunSync();
         assertTrue(badRecord.isLeft());
         assertTrue(badRecord.getLeft().contains("Cannot append blank or empty text"));
 
         // Step 1: Alice appends "Hello "
-        Either<String, AuditStep<EditAction>> success1 = process.record("doc-1", "user-A", new EditAction("Hello ", 1), t0).unsafeRunSync();
+        Either<String, AuditStep<EditAction>> success1 = process.register("doc-1", "user-A", new EditAction("Hello ", 1), t0).unsafeRunSync();
         assertTrue(success1.isRight());
         AuditStep<EditAction> step1 = success1.getRight();
 
         // Step 2: Bob appends "World!"
-        Either<String, AuditStep<EditAction>> success2 = process.record("doc-1", "user-B", new EditAction("World!", 1), t0.plusSeconds(10)).unsafeRunSync();
+        Either<String, AuditStep<EditAction>> success2 = process.register("doc-1", "user-B", new EditAction("World!", 1), t0.plusSeconds(10)).unsafeRunSync();
         assertTrue(success2.isRight());
         AuditStep<EditAction> step2 = success2.getRight();
 
@@ -106,9 +106,9 @@ class AuditableRecipeTest {
 
         process.initiate("doc-2").unsafeRunSync();
 
-        process.record("doc-2", "user-A", new EditAction("A", 1), t0).unsafeRunSync();
-        process.record("doc-2", "user-B", new EditAction("B", 1), t0.plusSeconds(10)).unsafeRunSync();
-        process.record("doc-2", "user-C", new EditAction("C", 1), t0.plusSeconds(20)).unsafeRunSync();
+        process.register("doc-2", "user-A", new EditAction("A", 1), t0).unsafeRunSync();
+        process.register("doc-2", "user-B", new EditAction("B", 1), t0.plusSeconds(10)).unsafeRunSync();
+        process.register("doc-2", "user-C", new EditAction("C", 1), t0.plusSeconds(20)).unsafeRunSync();
 
         // Replay history
         Either<String, DocumentState> replayResult = process.replay("doc-2").unsafeRunSync();
@@ -130,7 +130,7 @@ class AuditableRecipeTest {
 
         process.initiate("doc-3").unsafeRunSync();
 
-        Either<String, AuditStep<EditAction>> success = process.record("doc-3", "user-A", new EditAction("A", 1), t0).unsafeRunSync();
+        Either<String, AuditStep<EditAction>> success = process.register("doc-3", "user-A", new EditAction("A", 1), t0).unsafeRunSync();
         assertTrue(success.isRight());
         AuditStep<EditAction> step = success.getRight();
 
@@ -159,8 +159,8 @@ class AuditableRecipeTest {
 
         process.initiate("doc-4").unsafeRunSync();
 
-        process.record("doc-4", "user-A", new EditAction("A", 1), t0).unsafeRunSync();
-        process.record("doc-4", "user-B", new EditAction("B", 1), t0.plusSeconds(10)).unsafeRunSync();
+        process.register("doc-4", "user-A", new EditAction("A", 1), t0).unsafeRunSync();
+        process.register("doc-4", "user-B", new EditAction("B", 1), t0.plusSeconds(10)).unsafeRunSync();
 
         // Snapshotting and Ledger Compaction
         Either<String, DocumentState> snapshotResult = process.snapshot("doc-4", t0.plusSeconds(20)).unsafeRunSync();
@@ -172,7 +172,7 @@ class AuditableRecipeTest {
 
         // Confirm Event Publication
         List<AuditableEvent<String>> events = publisher.getPublishedEvents();
-        assertEquals(3, events.size()); // record A, record B, snapshot taken
+        assertEquals(3, events.size()); // register A, register B, snapshot taken
         assertTrue(events.get(2) instanceof AuditableEvent.SnapshotTaken);
 
         // Fetch the persisted ledger directly to confirm that its in-memory steps were compacted/cleared

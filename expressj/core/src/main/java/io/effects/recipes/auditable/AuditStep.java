@@ -4,7 +4,7 @@ import java.time.Instant;
 import java.util.Objects;
 
 /**
- * An immutable audit step record in a cryptographically secured chain.
+ * An immutable audit step register in a cryptographically secured chain.
  */
 public record AuditStep<E>(
     String stepId,

@@ -60,7 +60,7 @@ class MeterableRecipeTest {
 
         process.initiate("acc-1").unsafeRunSync();
 
-        // Cannot record usage before meter is started
+        // Cannot register usage before meter is started
         Either<String, UsageStep<ApiUsage>> badUsage1 = process.recordUsage("acc-1", new ApiUsage(50, "translate"), t0).unsafeRunSync();
         assertTrue(badUsage1.isLeft());
         assertTrue(badUsage1.getLeft().contains("billing meter is not ACTIVE"));
@@ -109,13 +109,13 @@ class MeterableRecipeTest {
         assertEquals(1.00, invoice.totalPrice());
         assertEquals("USD", invoice.currency());
 
-        // Post-Billing Finality Lock: Cannot record new usage in finalized terminal cycle
+        // Post-Billing Finality Lock: Cannot register new usage in finalized terminal cycle
         Either<String, UsageStep<ApiUsage>> postBillingUsage = process.recordUsage("acc-2", new ApiUsage(30, "translate"), t0.plusSeconds(40)).unsafeRunSync();
         assertTrue(postBillingUsage.isLeft());
 
         // Verify Event Publication
         List<MeterableEvent<String>> events = publisher.getPublishedEvents();
-        assertEquals(4, events.size()); // start, record 1, record 2, rate
+        assertEquals(4, events.size()); // start, register 1, register 2, rate
         assertTrue(events.get(3) instanceof MeterableEvent.MeterRated);
         assertEquals(invoice, ((MeterableEvent.MeterRated<String, BillInvoice>) events.get(3)).rating());
 

@@ -41,7 +41,7 @@ public final class FulfillmentLedger<ID, Q> {
         Objects.requireNonNull(nextStatus);
 
         if (isTerminal()) {
-            throw new IllegalStateException("Cannot record a step on a terminal fulfillment ledger: " + fulfillmentId);
+            throw new IllegalStateException("Cannot register a step on a terminal fulfillment ledger: " + fulfillmentId);
         }
 
         this.history.add(step);

@@ -20,7 +20,7 @@ public interface OwnableRequest<ID, O> {
 
     /**
      * Behavioral Message: Evaluates a proposed transfer or revocation.
-     * Receives the ownership record (state ledger) and current action context to decide
+     * Receives the ownership register (state ledger) and current action context to decide
      * whether the transition is valid.
      */
     Either<String, Void> evaluateTransfer(

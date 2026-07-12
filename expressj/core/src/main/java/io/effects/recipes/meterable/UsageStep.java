@@ -4,7 +4,7 @@ import java.time.Instant;
 import java.util.Objects;
 
 /**
- * An immutable record representing a single, discrete usage consumption tick.
+ * An immutable register representing a single, discrete usage consumption tick.
  */
 public record UsageStep<U>(
     String stepId,

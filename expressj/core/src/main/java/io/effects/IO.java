@@ -16,7 +16,7 @@ import java.util.function.Supplier;
  */
 public sealed interface IO<A> extends MonadError<A, Throwable> permits IO.Pure, IO.Delay, IO.FlatMap, IO.Async, IO.Error, IO.HandleError {
 
-    // Nested record for parallel tuple results
+    // Nested register for parallel tuple results
     record Pair<A, B>(A first, B second) {}
 
     // Typeclass Core Overrides

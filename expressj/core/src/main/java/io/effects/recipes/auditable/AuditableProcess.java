@@ -68,7 +68,7 @@ public final class AuditableProcess<ID, E, S> {
     /**
      * Records a new audit entry.
      */
-    public IO<Either<String, AuditStep<E>>> record(ID assetId, String actorId, E detail, Instant now) {
+    public IO<Either<String, AuditStep<E>>> register(ID assetId, String actorId, E detail, Instant now) {
         Objects.requireNonNull(assetId);
         Objects.requireNonNull(actorId);
         Objects.requireNonNull(detail);
@@ -98,7 +98,7 @@ public final class AuditableProcess<ID, E, S> {
 
                 return repository.save(assetId, ledger)
                     .flatMap(v -> publisher.publish(event))
-                    .flatMap(v -> telemetry.recordSuccess("auditable", assetId.toString() + ":record"))
+                    .flatMap(v -> telemetry.recordSuccess("auditable", assetId.toString() + ":register"))
                     .flatMap(v -> telemetry.recordDuration("auditable", assetId.toString(), System.currentTimeMillis() - startTime))
                     .map(v -> Either.<String, AuditStep<E>>right(step));
             })
