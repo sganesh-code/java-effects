@@ -107,14 +107,14 @@ repositories {
 }
 
 dependencies {
-    implementation("io.effects:core:0.1.0")
+    implementation("io.github.sganesh-code:core:0.1.0")
 }
 ```
 
 ### Maven
 ```xml
 <dependency>
-    <groupId>io.effects</groupId>
+    <groupId>io.github.sganesh-code</groupId>
     <artifactId>core</artifactId>
     <version>0.1.0</version>
 </dependency>

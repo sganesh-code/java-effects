@@ -7,7 +7,7 @@ This guide describes how to configure, sign, and publish the `expressj` library 
 ## 1. Prerequisites
 
 Before publishing, you need:
-1. **Sonatype Central Account:** Register and claim your namespace (e.g., `io.effects`) on the [Sonatype Central Portal](https://central.sonatype.org/).
+1. **Sonatype Central Account:** Register and claim your namespace (e.g., `io.github.sganesh-code`) on the [Sonatype Central Portal](https://central.sonatype.org/).
 2. **GPG Installed:** GnuPG installed locally (e.g., `brew install gnupg` on macOS).
 
 ---
@@ -105,13 +105,13 @@ Once published and synchronized (usually takes 15–30 minutes), users can add t
 
 ### Gradle (Kotlin DSL)
 ```kotlin
-implementation("io.effects:core:0.1.0")
+implementation("io.github.sganesh-code:core:0.1.0")
 ```
 
 ### Maven
 ```xml
 <dependency>
-    <groupId>io.effects</groupId>
+    <groupId>io.github.sganesh-code</groupId>
     <artifactId>core</artifactId>
     <version>0.1.0</version>
 </dependency>

@@ -14,7 +14,7 @@ plugins {
     signing
 }
 
-group = "io.effects"
+group = "io.github.sganesh-code"
 version = findProperty("version") as String? ?: "0.1.0-SNAPSHOT"
 
 repositories {
