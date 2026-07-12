@@ -33,3 +33,7 @@ build
 # Ignore docs folder
 docs/
 expressj/docs/
+
+# Ignore GPG key files
+*.asc
+*.gpg
