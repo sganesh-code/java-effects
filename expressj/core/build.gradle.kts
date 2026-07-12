@@ -148,20 +148,11 @@ tasks.register<Zip>("zipBundle") {
 signing {
     isRequired = System.getenv("CI") == "true"
     if (System.getenv("CI") == "true") {
-        val keyId = System.getenv("GPG_KEY_ID")
-        var privateKey = System.getenv("GPG_PRIVATE_KEY") ?: ""
-        val passphrase = System.getenv("GPG_PASSPHRASE")
-        
-        // Dynamically decode Base64 if the key does not start with standard PGP header
-        if (privateKey.isNotEmpty() && !privateKey.trim().startsWith("-----BEGIN PGP")) {
-            try {
-                privateKey = String(Base64.getDecoder().decode(privateKey.trim()))
-            } catch (e: Exception) {
-                // Use as-is if decoding fails
-            }
-        }
-        
-        useInMemoryPgpKeys(keyId, privateKey, passphrase)
+        useInMemoryPgpKeys(
+            System.getenv("GPG_KEY_ID"),
+            System.getenv("GPG_PRIVATE_KEY"),
+            System.getenv("GPG_PASSPHRASE")
+        )
     }
     sign(publishing.publications["mavenJava"])
 }
