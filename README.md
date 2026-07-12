@@ -68,6 +68,17 @@ For instance, during local development and rapid prototyping, you can run your e
 | **6. Ownable** | `register`, `assign`, `transfer` | **Corporate Asset Assignment:** Logging a physical device's serial number (e.g. laptop) and assigning or transferring its ownership to specific corporate employee accounts. |
 | **7. Entitleable** | `grant`, `check`, `revoke` | **Warranty Support SLA Coverage:** Assigning premium support SLA access levels to customer assets and verifying maintenance session authorization boundaries. |
 | **8. Observable** | `register`, `subscribe`, `unsubscribe`, `publish` | **Cross-Departmental Messaging Broker:** Allowing different corporate systems (Warehouse, Shipping, Billing) to subscribe to events and react asynchronously as a choreographed pipeline. |
+| **9. Schedulable** | `schedule`, `reschedule`, `trigger`, `cancel` | **Deferred Task Execution:** Scheduling premium member renewal invoicing, automated batch report generation, or delayed subscription cancellations. |
+| **10. Meterable** | `meterUsage`, `resetUsage`, `quotaCheck` | **Pay-As-You-Go Billing:** Tracking cloud resource consumption, API call volumes, or data transfer bytes to dynamically compute usage-based invoices. |
+| **11. Auditable** | `execute`, `audit`, `queryHistory` | **Chronological Compliance Ledger:** Writing an immutable, tamper-evident chronological ledger of critical user actions or balance adjustments for security compliance. |
+| **12. Routable** | `route`, `reroute`, `reject` | **Dynamic Support Dispatch:** Directing incoming customer support cases or logistics package deliveries to appropriate regional handlers or specialized support tiers based on capacity policies. |
+| **13. Reconciliable** | `match`, `flagDiscrepancy`, `resolve` | **Bank Ledger Cash Match:** Matching internal corporate bookkeeping transaction streams against external monthly bank statement files to discover and resolve cash discrepancies. |
+| **14. Retryable** | `execute`, `recordFailure`, `retryBackoff`, `abandon` | **Payment Gateway Resiliency:** Wrapping transient third-party card authorizations with adaptive exponential backoffs, scheduling retries, and recording final abandonment on permanent errors. |
+| **15. Claimable** | `file`, `review`, `accept`, `deny`, `dispute` | **Insurance Warranty Auditing:** Managing claimant warranty claims, coordinating medical/auditor review transitions, and validating re-opened claimant disputes. |
+| **16. Prioritizable** | `sequence`, `reprioritize`, `defer`, `expedite` | **Emergency Queue Triage:** Directing high-priority hospital triage or SaaS SLA tickets, dynamically reprioritizing cases, deferring non-urgent work, and expediting critical outages. |
+| **17. Compensable** | `runStep`, `triggerRollback`, `markCompensated`, `markCompensationFailure` | **Distributed Checkout Saga:** Coordinating hotel, flight, and rental car bookings. If booking flight fails, previous hotel reservations are automatically cancelled/refunded in reverse LIFO order. |
+| **18. Escalatable** | `file`, `triggerSLAWarning`, `escalate`, `deescalate`, `reassign` | **SLA Incident Management:** Raising warning flags as service desk deadlines approach, automatically escalating unhandled tickets to Tier-3 support, and reassigning engineers. |
+| **19. Throttlable** | `consume`, `throttle`, `refill` | **API Client Rate Limiting:** Enforcing fair-use Token Bucket backpressures against bursty API consumer requests, dynamically refilling quotas over elapsed milliseconds. |
 
 ---
 
