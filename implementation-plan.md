@@ -1,133 +1,105 @@
-# Implementation Plan: New Core OO Collaboration Recipes
+# Implementation Plan: Advanced Core OO Collaboration Recipes (Iteration 2)
 **Target Repository:** expressj
 **Reference Design:** [oo_object_recipe_research_notes.md](expressj/docs/oo_object_recipe_research_notes.md)
 
-The following tickets break down the implementation of the next set of reusable object collaboration recipes identified for the `expressj` library.
+The following tickets break down the implementation of the next set of advanced reusable object collaboration recipes identified for the `expressj` library, adhering strictly to pure OOP principles (zero getters, tell-dont-ask, state projection, and behavioral collaboration).
 
 ---
 
-- [x] **🎟️ [TICKET-001]: Implement Routable Collaboration Recipe**
-  - **Description:** Implement a generic `Routable` collaboration recipe that directs work units or tasks to appropriate destinations or handlers. It coordinates dynamic handler evaluation based on policy-driven rules, ownership/capacity constraints, or load balancing.
+- [x] **🎟️ [TICKET-001]: Implement Prioritizable Collaboration Recipe**
+  - **Description:** Implement a generic `Prioritizable` collaboration recipe that structures the triage, sequencing, deferral, and expedition of work items. The design must adhere strictly to pure OOP principles: no simple getter methods, no exposure of internal state lists, and using a visitor-based state projection or behavioral queries.
   - **Scope:**
     - **In scope:**
-      - Non-anemic `RouteLedger<ID, H, C>` aggregate root tracking route states (`UNROUTED`, `ROUTING`, `ROUTED`, `REJECTED`, `REROUTING`) and historical step decisions.
-      - Getter-free, behavioral `RoutableRequest<ID, H, C>` interface for synchronous routing decision callbacks (double dispatch).
-      - Monadic `RoutableProcess<ID, H, C>` process manager extending `Recipe` and leveraging `ProcessCoordinator` to execute operations inside `IO`.
-      - Domain events: `WorkRouted`, `WorkRerouted`, `RoutingRejected` under `io.effects.recipes.routable.models`.
-      - In-memory state repository, event publisher, and logging telemetry validation.
+      - Non-anemic `PriorityLedger<ID, P, C>` aggregate root tracking priority states (`UNTRIAGED`, `SEQUENCED`, `DEFERRED`, `EXPEDITED`) without exposing simple getter methods.
+      - A state projection pattern (e.g. `PriorityProjector<ID, P, C>`) to allow safe, controlled inspection of ledger history and values for test verification.
+      - Getter-free, behavioral `PrioritizableRequest<ID, P, C>` interface for validating priority assignments, deferrals, and escalations.
+      - Monadic `PrioritizableProcess<ID, P, C>` process manager extending `Recipe` and utilizing `ProcessCoordinator` inside `IO`.
+      - Domain events: `WorkSequenced`, `WorkReprioritized`, `WorkDeferred`, `WorkExpedited` under `io.effects.recipes.prioritizable.models`.
+      - Comprehensive unit and integration tests under `expressj/core/src/test/java/io/effects/recipes/prioritizable/` checking all invariants, sequence laws, and backpressure actions.
     - **Out of scope:**
-      - Distributed clustering algorithms, network messaging brokers, or direct thread-pool executors.
+      - Hardcoded priority values, sorting comparator libraries, or direct database query builders.
   - **Implementation Tasks:**
-    - [x] Create package `io.effects.recipes.routable` and sub-package `models`.
-      - *Created the package directories and files under `io.effects.recipes.routable` and `models`.*
-    - [x] Implement `RoutableEvent<ID, H>` and concrete event models:
-      - `WorkRouted<ID, H>`
-      - `WorkRerouted<ID, H>`
-      - `RoutingRejected<ID>`
-      - *Implemented the generic `RoutableEvent` interface, `RoutingStep` record, and concrete record events: `WorkRouted`, `WorkRerouted`, and `RoutingRejected`.*
-    - [x] Define the getter-free interface `RoutableRequest<ID, H, C>` specifying behavioral callbacks:
-      - `evaluateInitialRoute(...)`
-      - `evaluateReroute(...)`
-      - `evaluateRejection(...)`
-      - *Created the getter-free, behavioral `RoutableRequest` interface supporting double dispatch validation.*
-    - [x] Implement the `RouteLedger<ID, H, C>` aggregate root. Ensure it is thread-safe (`synchronized`), keeps an immutable chronological history of routing decisions, and encapsulates state transition invariants.
-      - *Implemented the thread-safe `RouteLedger` aggregate root with full state machine tracking, transition validations, and chronological steps.*
-    - [x] Create `RoutableProcess<ID, H, C>` extending `Recipe<ID, RoutableRequest<ID, H, C>>` that coordinates persistence, event publishing, and telemetry using the `ProcessCoordinator`.
-      - *Created the monadic `RoutableProcess` coordinating persistence, event publisher, and telemetry logging inside standard functional `IO` shell.*
-    - [x] Add unit and integration tests under `expressj/core/src/test/java/io/effects/recipes/routable/` verifying:
-      - Successful direct routing paths.
-      - Escalated/rerouted scenarios.
-      - Routing rejection handling and explanation.
-      - Law verification (e.g. cannot reroute a rejected route without reopening, historical preservation).
-      - *Created complete suite of tests in `RoutableRecipeTest` covering all routing transition lifecycles, validation rules, idempotency, and law verification.*
+    - [x] Create package `io.effects.recipes.prioritizable` and sub-package `models`.
+      - *Created package directories and files under `io.effects.recipes.prioritizable` and `models`.*
+    - [x] Implement `PrioritizableEvent<ID, P>` and concrete event models:
+      - `WorkSequenced<ID, P>`
+      - `WorkReprioritized<ID, P>`
+      - `WorkDeferred<ID, P>`
+      - `WorkExpedited<ID, P>`
+      - *Implemented the generic `PrioritizableEvent` interface, `PriorityStep` record, and concrete event record models `WorkSequenced`, `WorkReprioritized`, `WorkDeferred`, and `WorkExpedited`.*
+    - [x] Define the getter-free interface `PrioritizableRequest<ID, P, C>` specifying behavioral callbacks:
+      - `evaluateInitialPriority(...)`
+      - `evaluateReprioritization(...)`
+      - `evaluateDeferral(...)`
+      - `evaluateExpedition(...)`
+      - *Created the getter-free behavioral interface defining pure synchronous double-dispatch validation rules.*
+    - [x] Implement the `PriorityLedger<ID, P, C>` aggregate root. Ensure it has **zero simple getters**, is thread-safe (`synchronized`), and implements a `projectState(PriorityProjector<ID, P, C>)` visitor.
+      - *Implemented the completely getter-free thread-safe `PriorityLedger` aggregate root with visitor-based state projection and behavioral query helpers.*
+    - [x] Create `PrioritizableProcess<ID, P, C>` extending `Recipe` that coordinates persistence, event publishing, and telemetry using `ProcessCoordinator`.
+      - *Created the monadic `PrioritizableProcess` coordinating state persistence, event publication, and telemetry within functional `IO` shell.*
+    - [x] Add unit and integration tests under `expressj/core/src/test/java/io/effects/recipes/prioritizable/` verifying:
+      - Successful sequencing and reprioritization paths.
+      - Deferral validation and timed checks.
+      - Expedition paths.
+      - Pure OOP law validation (state is protected, getters are absent, verification is done through events and projectors).
+      - *Created exhaustive test suite in `PrioritizableRecipeTest` verifying all priority transitions, validating deferrals and expeditions, and demonstrating pure OOP verification using the `PriorityProjector` visitor pattern.*
 
 ---
 
-- [x] **🎟️ [TICKET-002]: Implement Reconciliable Collaboration Recipe**
-  - **Description:** Implement a generic `Reconciliable` collaboration recipe designed to compare and match two state records (internal ledger vs. external source), tracking matching states, identifying discrepancies, and supporting resolution actions.
+- [ ] **🎟️ [TICKET-002]: Implement Compensable Collaboration Recipe**
+  - **Description:** Implement a generic `Compensable` collaboration recipe to coordinate semantic "undo" or reversal actions for multi-step distributed operations (Saga pattern) without exposing internal execution state.
   - **Scope:**
     - **In scope:**
-      - Non-anemic `ReconciliationLedger<ID, K, E, C>` tracking statuses (`UNMATCHED`, `MATCHED`, `DISCREPANCY`, `RESOLVED`) and mismatch history.
-      - Getter-free, behavioral `ReconciliableRequest<ID, K, E, C>` interface to define match rules and discrepancy handling callbacks.
-      - Monadic `ReconciliableProcess<ID, K, E, C>` coordinating verification, saving state, publishing events, and logging telemetry.
-      - Domain events: `ItemMatched`, `DiscrepancyFlagged`, `DiscrepancyResolved`.
+      - Non-anemic `CompensationLedger<ID, C>` tracking Saga transaction statuses (`INITIAL`, `STEP_COMPLETED`, `COMPENSATING`, `COMPENSATED`, `FAILED`) without simple getters.
+      - Getter-free, behavioral `CompensableRequest<ID, C>` representing the Saga execution logic and validation criteria.
+      - Monadic `CompensableProcess<ID, C>` coordinating step execution, catching downstream failures, and running compensating operations in `IO`.
+      - Domain events: `SagaStepSucceeded`, `SagaRollbackTriggered`, `SagaCompensated`, `SagaCompensatedFailed`.
     - **Out of scope:**
-      - Brittle CSV parsing, physical database transaction synchronization, or direct TCP connection polling.
+      - Distributed locking mechanics or persistent network database transactions.
   - **Implementation Tasks:**
-    - [x] Create package `io.effects.recipes.reconciliable` and sub-package `models`.
-      - *Created package directories and files under `io.effects.recipes.reconciliable` and `models`.*
-    - [x] Define reconciliation event types: `ReconciliationEvent<ID, K>`, `ItemMatched<ID, K>`, `DiscrepancyFlagged<ID, K>`, `DiscrepancyResolved<ID, K>`.
-      - *Implemented the generic `ReconciliationEvent` contract, `ReconciliationStep` record, and concrete event types `ItemMatched`, `DiscrepancyFlagged`, and `DiscrepancyResolved`.*
-    - [x] Define behavioral request interface `ReconciliableRequest<ID, K, E, C>` exposing:
-      - `evaluateMatching(...)`
-      - `evaluateDiscrepancy(...)`
-      - `evaluateResolution(...)`
-      - *Created the getter-free behavioral interface specifying criteria evaluations.*
-    - [x] Build the rich aggregate root `ReconciliationLedger<ID, K, E, C>` capturing item matching, mismatch codes, resolution audit records, and state transitions.
-      - *Implemented the non-anemic thread-safe `ReconciliationLedger` aggregate root with double dispatch callbacks.*
-    - [x] Create `ReconciliableProcess<ID, K, E, C>` process coordinator using `ProcessCoordinator` to orchestrate reconciliation executions in `IO`.
-      - *Created the monadic `ReconciliableProcess` matching coordinator implementing `Recipe` and leveraging `ProcessCoordinator` inside standard functional `IO` shell.*
-    - [x] Add comprehensive tests under `expressj/core/src/test/java/io/effects/recipes/reconciliable/` verifying:
-      - Perfect matching flow (reaches `MATCHED` terminal state).
-      - Multi-stage mismatch/discrepancy flagging and resolution audit preservation.
-      - Double match prevention and status laws.
-      - *Created exhaustive test suite in `ReconciliationRecipeTest` covering matches, amount verification errors, discrepancy flagging, manual adjustment resolutions, and terminal state invariants.*
+    - [ ] Create package `io.effects.recipes.compensable` and sub-package `models`.
+    - [ ] Define compensable event types under `models`.
+    - [ ] Define behavioral request interface `CompensableRequest<ID, C>`.
+    - [ ] Build rich aggregate root `CompensationLedger<ID, C>` with a state projection interface.
+    - [ ] Create `CompensableProcess<ID, C>` extending `Recipe` to orchestrate step execution and rollback in `IO`.
+    - [ ] Add comprehensive tests verifying Saga completion, automatic compensation triggering on failures, and final terminal audits.
 
 ---
 
-- [x] **🎟️ [TICKET-003]: Implement Retryable Collaboration Recipe**
-  - **Description:** Implement a generic `Retryable` collaboration recipe that manages the execution of transiently-failing actions, orchestrating attempts according to modular backoff policies, recording success/failure histories, and enforcing terminal abandonment/fallback when thresholds are exceeded.
+- [ ] **🎟️ [TICKET-003]: Implement Escalatable Collaboration Recipe**
+  - **Description:** Implement a generic `Escalatable` collaboration recipe to handle time-sensitive re-assignments, SLA breaches, and authority promotion for cases or transactions.
   - **Scope:**
     - **In scope:**
-      - Non-anemic `RetryLedger<ID, C>` tracking states (`PENDING`, `ATTEMPTING`, `SUCCEEDED`, `RETRY_PENDING`, `FAILED`) and step histories of exception details and backoff calculations.
-      - Getter-free, behavioral `RetryableRequest<ID, C>` interface for assessing if a failure is transient and calculating next backoff delay.
-      - Monadic `RetryableProcess<ID, C>` which safely schedules retry delayed tasks using functional monadic `IO` timers.
-      - Domain events: `ExecutionSucceeded`, `RetryScheduled`, `AttemptFailed`, `ExecutionAbandoned`.
+      - Non-anemic `EscalationLedger<ID, T, C>` tracking states (`STANDARD`, `SLA_WARNING`, `ESCALATED`, `REASSIGNED`, `RESOLVED`) without exposing simple state getters.
+      - Getter-free, behavioral `EscalatableRequest<ID, T, C>` defining SLA and promotion validations.
+      - Monadic `EscalatableProcess<ID, T, C>` coordinator running under monadic `IO`.
+      - Domain events: `SLAWarningTriggered`, `CaseEscalated`, `CaseDeescalated`, `CaseReassigned`.
     - **Out of scope:**
-      - Deep system-level `Thread.sleep()` threads or direct OS-level job schedulers. Delay execution must leverage monadic `IO.delay` or asynchronous task executors.
+      - Direct email notifications or SMS dispatch integrations.
   - **Implementation Tasks:**
-    - [x] Create package `io.effects.recipes.retryable` and sub-package `models`.
-      - *Created package directories and files under `io.effects.recipes.retryable` and `models`.*
-    - [x] Define retry event types: `RetryableEvent<ID>`, `ExecutionSucceeded<ID>`, `RetryScheduled<ID>`, `AttemptFailed<ID>`, `ExecutionAbandoned<ID>`.
-      - *Implemented the generic `RetryableEvent` contract, `RetryStep` record, and concrete event types `ExecutionSucceeded`, `RetryScheduled`, `AttemptFailed`, and `ExecutionAbandoned`.*
-    - [x] Define behavioral request interface `RetryableRequest<ID, C>` for assessing error categorization and defining backoff policy (e.g. constant, exponential with jitter).
-      - *Created the getter-free behavioral interface to evaluate failure transience, max attempts, and calculate backoff delay durations.*
-    - [x] Build the non-anemic `RetryLedger<ID, C>` aggregate root to capture attempts count, error messages, and state progression.
-      - *Implemented the non-anemic, thread-safe `RetryLedger` aggregate root owning lifecycle attempt states.*
-    - [x] Implement `RetryableProcess<ID, C>` extending `Recipe` to execute the runnable operations, log telemetry, publish retry events, and manage scheduler delays.
-      - *Created the monadic `RetryableProcess` that implements lazy execution wrapping, error inspection, recursive retry backoffs, and telemetry reporting.*
-    - [x] Add rigorous unit tests under `expressj/core/src/test/java/io/effects/recipes/retryable/` verifying:
-      - Instant success path (no retries).
-      - Brittle operation that fails once, retries with backoff delay, and then succeeds.
-      - Permanent failure path that exceeds retry limits and transitions to terminal `FAILED` (emits `ExecutionAbandoned`).
-      - Invariants validation (e.g. attempt counters, maximum retry limitations, thread-safety).
-      - *Created complete suite of tests in `RetryableRecipeTest` covering immediate success, brittle operations that retry and succeed, permanent failures exceeding limits, and immediate abandonment for fatal non-transient errors.*
+    - [ ] Create package `io.effects.recipes.escalatable` and sub-package `models`.
+    - [ ] Define escalation event types and step records.
+    - [ ] Define behavioral request interface `EscalatableRequest<ID, T, C>`.
+    - [ ] Build rich aggregate root `EscalationLedger<ID, T, C>` with visitor state projection.
+    - [ ] Create `EscalatableProcess<ID, T, C>` extending `Recipe` using `ProcessCoordinator`.
+    - [ ] Add unit tests verifying SLA breaches, authority escalation, re-assignment, and de-escalation lifecycles.
 
 ---
 
-- [x] **🎟️ [TICKET-004]: Implement Claimable Collaboration Recipe**
-  - **Description:** Implement a generic `Claimable` collaboration recipe that structures the process of asserting a dispute, request, or factual claim, managing multi-step review, verification, and final acceptance/denial actions.
+- [ ] **🎟️ [TICKET-004]: Implement Throttlable Collaboration Recipe**
+  - **Description:** Implement a generic `Throttlable` collaboration recipe that manages rate-limiting, token consumption, sliding window histories, and backpressure enforcement.
   - **Scope:**
     - **In scope:**
-      - Non-anemic `ClaimLedger<ID, V, C>` tracking states (`FILED`, `UNDER_REVIEW`, `DISPUTED`, `ACCEPTED`, `DENIED`) and historical evidence evaluations.
-      - Getter-free, behavioral `ClaimableRequest<ID, V, C>` interface representing double dispatch validation for reviews.
-      - Monadic `ClaimableProcess<ID, V, C>` orchestrator executing transitions under `IO`.
-      - Domain events: `ClaimFiled`, `ClaimUnderReview`, `ClaimAccepted`, `ClaimDenied`, `ClaimDisputed`.
+      - Non-anemic `TokenBucketLedger<ID, C>` tracking token capacities (`ALLOWED`, `THROTTLED`, `RESTORED`) with **zero getters**.
+      - Getter-free, behavioral `ThrottlableRequest<ID, C>` interface defining dynamic capacity and refill rates.
+      - Monadic `ThrottlableProcess<ID, C>` coordinating adaptive consumption and quota refills inside `IO`.
+      - Domain events: `TokensConsumed`, `RateThrottled`, `QuotaRefilled`.
     - **Out of scope:**
-      - Direct storage of raw large files/PDFs (only metadata links are managed), physical document verification, or electronic signature integrations.
+      - Distributed Redis-backed rate limiters (only local-to-node thread-safe JVM memory limiters are managed).
   - **Implementation Tasks:**
-    - [x] Create package `io.effects.recipes.claimable` and sub-package `models`.
-      - *Created package directories and files under `io.effects.recipes.claimable` and `models`.*
-    - [x] Define claim event types: `ClaimableEvent<ID>`, `ClaimFiled<ID>`, `ClaimUnderReview<ID>`, `ClaimAccepted<ID>`, `ClaimDenied<ID>`, `ClaimDisputed<ID>`.
-      - *Implemented the generic `ClaimableEvent` contract, `ClaimStep` record, and concrete event types `ClaimFiled`, `ClaimUnderReview`, `ClaimAccepted`, `ClaimDenied`, and `ClaimDisputed`.*
-    - [x] Define behavioral request interface `ClaimableRequest<ID, V, C>` for assessing submitted evidence.
-      - *Created the getter-free behavioral interface to evaluate claim filing, review transitions, accept/deny decisions, and reopening disputes.*
-    - [x] Implement `ClaimLedger<ID, V, C>` aggregate root representing reviews chronology, verification state, and decision logs.
-      - *Implemented the non-anemic thread-safe `ClaimLedger` aggregate root with synchronized transition validations and history retention.*
-    - [x] Build `ClaimableProcess<ID, V, C>` extending `Recipe` and leveraging `ProcessCoordinator`.
-      - *Created the monadic `ClaimableProcess` coordinator implementing `Recipe` and leveraging `ProcessCoordinator` inside standard functional `IO` shell.*
-    - [x] Add unit tests under `expressj/core/src/test/java/io/effects/recipes/claimable/` verifying:
-      - Direct accept/deny paths.
-      - Dispute and re-evaluation flows.
-      - Evidence-based validator constraints.
-      - *Created complete suite of tests in `ClaimableRecipeTest` covering direct filing/reviews/accepts, role-based MD validation rules on high-amount claims, and multi-stage denial dispute and re-evaluations.*
+    - [ ] Create package `io.effects.recipes.throttlable` and sub-package `models`.
+    - [ ] Define throttlable event types and state buckets.
+    - [ ] Define behavioral request interface `ThrottlableRequest<ID, C>`.
+    - [ ] Build rich aggregate root `TokenBucketLedger<ID, C>` with visitor projection.
+    - [ ] Create `ThrottlableProcess<ID, C>` extending `Recipe`.
+    - [ ] Add unit tests verifying token consumption, sliding backpressure delays, automatic refills, and quota limits.
