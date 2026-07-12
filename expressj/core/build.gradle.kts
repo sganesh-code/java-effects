@@ -11,6 +11,7 @@ plugins {
     `java-library`
     jacoco
     `maven-publish`
+    signing
 }
 
 group = "io.effects"
@@ -125,5 +126,28 @@ publishing {
                 }
             }
         }
+    }
+    
+    repositories {
+        maven {
+            name = "OSSRH"
+            val releasesRepoUrl = "https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/"
+            val snapshotsRepoUrl = "https://s01.oss.sonatype.org/content/repositories/snapshots/"
+            url = uri(if (version.toString().endsWith("SNAPSHOT")) snapshotsRepoUrl else releasesRepoUrl)
+            
+            credentials {
+                username = findProperty("mavenUsername") as String? ?: ""
+                password = findProperty("mavenPassword") as String? ?: ""
+            }
+        }
+    }
+}
+
+signing {
+    val signingKey = findProperty("signingKey") as String?
+    val signingPassword = findProperty("signingPassword") as String?
+    if (!signingKey.isNullOrEmpty()) {
+        useInMemoryPgpKeys(signingKey, signingPassword)
+        sign(publishing.publications)
     }
 }
