@@ -145,10 +145,15 @@ publishing {
 }
 
 signing {
+    val signingKeyId = findProperty("signingKeyId") as String?
     val signingKey = findProperty("signingKey") as String?
     val signingPassword = findProperty("signingPassword") as String?
     if (!signingKey.isNullOrEmpty()) {
-        useInMemoryPgpKeys(signingKey, signingPassword)
+        if (!signingKeyId.isNullOrEmpty()) {
+            useInMemoryPgpKeys(signingKeyId, signingKey, signingPassword)
+        } else {
+            useInMemoryPgpKeys(signingKey, signingPassword)
+        }
         sign(publishing.publications)
     }
 }
