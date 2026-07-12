@@ -15,7 +15,7 @@ plugins {
 }
 
 group = "io.effects"
-version = "0.1.0-SNAPSHOT"
+version = findProperty("version") as String? ?: "0.1.0-SNAPSHOT"
 
 repositories {
     // Use Maven Central for resolving dependencies.
