@@ -199,4 +199,94 @@ class EscalatableRecipeTest {
         assertEquals("Tier-1", lowFinalProjector.currentTier);
         assertEquals(EscalationLedger.Status.STANDARD, lowFinalProjector.status);
     }
+
+    @Test
+    void testEscalationLedgerErrorStates() {
+        EscalationLedger<String, String, String> ledger = EscalationLedger.initiate("case-999");
+        SupportTicketCase ticket = new SupportTicketCase("MEDIUM");
+        Instant now = Instant.parse("2026-07-12T16:00:00Z");
+
+        // 1. Cannot trigger SLA warning on unfiled case
+        Either<String, EscalatableEvent<String, String>> warningUnfiled =
+            ledger.triggerSLAWarning(now.plusSeconds(3600), "warning", ticket, now);
+        assertTrue(warningUnfiled.isLeft());
+        assertEquals("Cannot trigger SLA warning on unfiled case: case-999", warningUnfiled.getLeft());
+
+        // 2. Cannot escalate unfiled case
+        Either<String, EscalatableEvent<String, String>> escalateUnfiled =
+            ledger.escalate("Tier-2", "escalate", ticket, now);
+        assertTrue(escalateUnfiled.isLeft());
+        assertEquals("Cannot escalate unfiled case: case-999", escalateUnfiled.getLeft());
+
+        // 3. Cannot de-escalate unfiled case
+        Either<String, EscalatableEvent<String, String>> deescalateUnfiled =
+            ledger.deescalate("Tier-1", "deescalate", ticket, now);
+        assertTrue(deescalateUnfiled.isLeft());
+        assertEquals("Cannot de-escalate unfiled case: case-999", deescalateUnfiled.getLeft());
+
+        // 4. Cannot reassign unfiled case
+        Either<String, EscalatableEvent<String, String>> reassignUnfiled =
+            ledger.reassign("agent-2", "reassign", ticket, now);
+        assertTrue(reassignUnfiled.isLeft());
+        assertEquals("Cannot reassign unfiled case: case-999", reassignUnfiled.getLeft());
+
+        // 5. Cannot resolve unfiled case
+        Either<String, EscalatableEvent<String, String>> resolveUnfiled =
+            ledger.resolve("resolve", now);
+        assertTrue(resolveUnfiled.isLeft());
+        assertEquals("Cannot resolve unfiled case: case-999", resolveUnfiled.getLeft());
+
+        // Now file the case
+        Either<String, EscalatableEvent<String, String>> fileRes =
+            ledger.file("Tier-1", "agent-1", "file", ticket, now);
+        assertTrue(fileRes.isRight());
+
+        // 6. Case already filed check
+        Either<String, EscalatableEvent<String, String>> doubleFile =
+            ledger.file("Tier-1", "agent-1", "file-again", ticket, now);
+        assertTrue(doubleFile.isLeft());
+        assertTrue(doubleFile.getLeft().contains("Case has already been filed"));
+
+        // 7. Reassign to same handler check
+        Either<String, EscalatableEvent<String, String>> reassignSame =
+            ledger.reassign("agent-1", "same", ticket, now);
+        assertTrue(reassignSame.isLeft());
+        assertTrue(reassignSame.getLeft().contains("Proposed handler is already the current handler"));
+
+        // Resolve the case
+        Either<String, EscalatableEvent<String, String>> resolveRes =
+            ledger.resolve("resolve-case", now);
+        assertTrue(resolveRes.isRight());
+        assertTrue(ledger.isTerminal());
+
+        // 8. Idempotent resolve on resolved case
+        Either<String, EscalatableEvent<String, String>> doubleResolve =
+            ledger.resolve("resolve-case-again", now);
+        assertTrue(doubleResolve.isRight());
+        assertNull(doubleResolve.getRight());
+
+        // 9. Cannot trigger warning on terminal case
+        Either<String, EscalatableEvent<String, String>> warningTerminal =
+            ledger.triggerSLAWarning(now.plusSeconds(3600), "warning", ticket, now);
+        assertTrue(warningTerminal.isLeft());
+        assertTrue(warningTerminal.getLeft().contains("Cannot trigger SLA warning on terminal resolved case"));
+
+        // 10. Cannot escalate terminal case
+        Either<String, EscalatableEvent<String, String>> escalateTerminal =
+            ledger.escalate("Tier-2", "escalate", ticket, now);
+        assertTrue(escalateTerminal.isLeft());
+        assertTrue(escalateTerminal.getLeft().contains("Cannot escalate terminal resolved case"));
+
+        // 11. Cannot de-escalate terminal case
+        Either<String, EscalatableEvent<String, String>> deescalateTerminal =
+            ledger.deescalate("Tier-1", "deescalate", ticket, now);
+        assertTrue(deescalateTerminal.isLeft());
+        assertTrue(deescalateTerminal.getLeft().contains("Cannot de-escalate terminal resolved case"));
+
+        // 12. Cannot reassign terminal case
+        Either<String, EscalatableEvent<String, String>> reassignTerminal =
+            ledger.reassign("agent-2", "reassign", ticket, now);
+        assertTrue(reassignTerminal.isLeft());
+        assertTrue(reassignTerminal.getLeft().contains("Cannot reassign terminal resolved case"));
+    }
 }

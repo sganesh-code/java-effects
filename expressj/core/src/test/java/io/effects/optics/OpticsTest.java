@@ -142,4 +142,50 @@ class OpticsTest {
 
         assertEquals(60, ioComposeResult.unsafeRunSync());
     }
+
+    static final Iso<String, Integer> stringLengthIso = new Iso<>() {
+        @Override public Integer get(String s) { return s.length(); }
+        @Override public String reverseGet(Integer i) { return String.valueOf(i); }
+    };
+
+    @Test
+    void testIsoComposition() {
+        Iso<WrappedString, Integer> composedIso = wrappedStringIso.compose(stringLengthIso);
+        assertEquals(7, composedIso.get(new WrappedString("effects")));
+        assertEquals("7", composedIso.reverseGet(7).val());
+        assertEquals("14", composedIso.modify(new WrappedString("effects"), x -> x * 2).val());
+    }
+
+    static final Prism<String, Integer> stringIntegerPrism = new Prism<>() {
+        @Override
+        public Optional<Integer> getOption(String s) {
+            try {
+                return Optional.of(Integer.parseInt(s));
+            } catch (NumberFormatException e) {
+                return Optional.empty();
+            }
+        }
+        @Override
+        public String reverseGet(Integer i) {
+            return String.valueOf(i);
+        }
+    };
+
+    @Test
+    void testPrismComposition() {
+        Prism<Either<String, Integer>, String> leftPrism = Either.leftPrism();
+        Prism<Either<String, Integer>, Integer> composedPrism = leftPrism.compose(stringIntegerPrism);
+
+        Either<String, Integer> success = Either.left("123");
+        Either<String, Integer> failure = Either.left("not-a-number");
+        Either<String, Integer> right = Either.right(42);
+
+        assertEquals(Optional.of(123), composedPrism.getOption(success));
+        assertEquals(Optional.empty(), composedPrism.getOption(failure));
+        assertEquals(Optional.empty(), composedPrism.getOption(right));
+
+        Either<String, Integer> reversed = composedPrism.reverseGet(456);
+        assertTrue(reversed.isLeft());
+        assertEquals("456", reversed.getLeft());
+    }
 }

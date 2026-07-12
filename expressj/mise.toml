@@ -13,3 +13,7 @@ description = "Execute tests and generate JaCoCo coverage reports"
 [tasks.coverage-clean]
 run = "./gradlew clean test"
 description = "Clean build directories and execute tests from scratch"
+
+[tasks.coverage-check]
+run = "./gradlew jacocoTestCoverageVerification"
+description = "Verify code coverage percentages against the gating thresholds"
