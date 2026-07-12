@@ -4,7 +4,7 @@ import java.util.Objects;
 import java.util.function.Function;
 
 /**
- * A Kleisli arrow represents a function from a plain type A to a monadic effect F<B>.
+ * A Kleisli arrow represents a function from a plain type A to a monadic effect {@code F<B>}.
  * Enables sequential composition of effectful functions (monadic pipelines).
  *
  * @param <A> the input type

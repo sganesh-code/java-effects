@@ -10,7 +10,11 @@ plugins {
     // Apply the java-library plugin for API and implementation separation.
     `java-library`
     jacoco
+    `maven-publish`
 }
+
+group = "io.effects"
+version = "0.1.0-SNAPSHOT"
 
 repositories {
     // Use Maven Central for resolving dependencies.
@@ -50,6 +54,8 @@ java {
     toolchain {
         languageVersion = JavaLanguageVersion.of(21)
     }
+    withSourcesJar()
+    withJavadocJar()
 }
 
 jacoco {
@@ -88,4 +94,36 @@ tasks.jacocoTestCoverageVerification {
 
 tasks.check {
     dependsOn(tasks.jacocoTestCoverageVerification)
+}
+
+publishing {
+    publications {
+        create<MavenPublication>("mavenJava") {
+            from(components["java"])
+            
+            pom {
+                name.set("ExpressJ Core")
+                description.set("Pure Functional Object Collaboration Recipes and Monadic IO Shell for Java")
+                url.set("https://github.com/expressj/expressj")
+                licenses {
+                    license {
+                        name.set("The Apache License, Version 2.0")
+                        url.set("http://www.apache.org/licenses/LICENSE-2.0.txt")
+                    }
+                }
+                developers {
+                    developer {
+                        id.set("expressj")
+                        name.set("ExpressJ Contributors")
+                        email.set("contributors@expressj.io")
+                    }
+                }
+                scm {
+                    connection.set("scm:git:git://github.com/expressj/expressj.git")
+                    developerConnection.set("scm:git:ssh://github.com/expressj/expressj.git")
+                    url.set("https://github.com/expressj/expressj")
+                }
+            }
+        }
+    }
 }

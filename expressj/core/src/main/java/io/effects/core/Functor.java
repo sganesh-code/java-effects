@@ -14,7 +14,7 @@ public interface Functor<T> extends F<T, Functor<T>> {
     }
 
     /**
-     * Lifts a function from A -> B into a Functor-compatible function F<A> -> F<B>.
+     * Lifts a function from A -> B into a Functor-compatible function {@code F<A> -> F<B>}.
      */
     @SuppressWarnings("unchecked")
     default <R> Function<F<T, ? extends Functor<T>>, F<R, ? extends Functor<R>>> lift(
