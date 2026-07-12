@@ -1,6 +1,5 @@
 package io.effects.recipes.routable;
 
-import io.effects.recipes.routable.models.*;
 import io.effects.core.Either;
 import io.effects.core.IO;
 import io.effects.ports.EventPublisher;
@@ -14,7 +13,6 @@ import io.effects.recipes.Recipe;
 import io.effects.recipes.TransitionResult;
 import java.time.Instant;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.function.Function;
@@ -25,9 +23,6 @@ import java.util.function.Function;
  * completely decoupled from business logic invariants (which reside inside RouteLedger).
  */
 public final class RoutableProcess<ID, H, C> implements Recipe<ID, RoutableRequest<ID, H, C>> {
-    private final StateRepository<ID, RouteLedger<ID, H, C>> repository;
-    private final EventPublisher<RoutableEvent<ID, H>> publisher;
-    private final TelemetryPort telemetry;
     private final ProcessCoordinator<ID, RouteLedger<ID, H, C>, RoutableEvent<ID, H>> coordinator;
     private final ConcurrentMap<ID, RoutableRequest<ID, H, C>> requests = new ConcurrentHashMap<>();
 
@@ -46,9 +41,6 @@ public final class RoutableProcess<ID, H, C> implements Recipe<ID, RoutableReque
         EventPublisher<RoutableEvent<ID, H>> publisher,
         TelemetryPort telemetry
     ) {
-        this.repository = Objects.requireNonNull(repository);
-        this.publisher = Objects.requireNonNull(publisher);
-        this.telemetry = Objects.requireNonNull(telemetry);
         this.coordinator = new ProcessCoordinator<>(repository, publisher, telemetry, "routable");
     }
 
