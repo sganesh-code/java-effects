@@ -1,5 +1,7 @@
 # 🚀 expressj: Collaborative Business Recipes for Rapid Prototyping
 
+[![CI](https://github.com/sganesh-code/java-effects/actions/workflows/ci.yml/badge.svg)](https://github.com/sganesh-code/java-effects/actions/workflows/ci.yml)
+
 `expressj` is a lightweight, high-performance, and language-native Java library providing core business logic as reusable, type-safe **"Recipes"** (collaboration protocols). 
 
 By separating high-level business rules from low-level infrastructure, `expressj` enables teams to rapidly identify, model, and deploy complex business workflows completely isolated from the details of databases, message brokers, and execution environments.
@@ -91,3 +93,125 @@ For instance, during local development and rapid prototyping, you can run your e
 | **Testing Feedback Loop** | **Slow and Brittle:** Verifying basic discount calculations requires spinning up heavy frameworks, mock configurations (Mockito), or Testcontainers databases. | **Instantaneous:** 100% of your business rules and state transitions can be verified in milliseconds using standard, zero-dependency unit tests. |
 | **Concurrency & State Safety** | **Complex & Error-Prone:** Developers must manually manage thread locks, pessimistic/optimistic db locking, or distributed mutexes, which frequently causes deadlocks. | **Guaranteed by Design:** Recipes mathematically guarantee thread safety and chronological state transitions inside the shell, protecting the domain core. |
 | **Infrastructure Portability** | **Locked-In:** Migrating from a relational DB (PostgreSQL) to a NoSQL DB (DynamoDB), or switching from RabbitMQ to Apache Kafka, requires rewriting the entire application. | **Plug-And-Play:** The exact same business logic runs untouched; changing infrastructure only requires writing or selecting a small, isolated external adapter. |
+
+---
+
+## 📦 Dependency Coordinates
+
+To start using `expressj` in your own projects, add the core module dependency:
+
+### Gradle (Kotlin DSL)
+```kotlin
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation("io.effects:core:0.1.0")
+}
+```
+
+### Maven
+```xml
+<dependency>
+    <groupId>io.effects</groupId>
+    <artifactId>core</artifactId>
+    <version>0.1.0</version>
+</dependency>
+```
+
+---
+
+## ⚡ Quick Start: Your First Business Recipe
+
+Let's see how simple it is to model a corporate **Approval Workflow** (such as approving discount proposals or purchase requisitions) using `expressj`'s standard **Approvable** recipe, completely isolated from databases or network brokers.
+
+### 1. Define Your Getter-Free Business Rules
+
+Create a record that implements `ApprovableRequest`. Note that it has **zero passive getters/setters** and encapsulates all corporate pricing/discount policies within pure, testable domain behaviors:
+
+```java
+import io.effects.recipes.approvable.*;
+import io.effects.recipes.approvable.models.*;
+import io.effects.core.Either;
+import java.time.Instant;
+
+public record DiscountProposal(double discountPercentage) implements ApprovableRequest<String, String, String> {
+
+    @Override
+    public InitialAssessment<String> evaluateInitialSubmission(Instant now) {
+        if (discountPercentage < 10.0) {
+            return new InitialAssessment<>(Status.APPROVED, null); // Auto-approved!
+        } else if (discountPercentage < 25.0) {
+            return new InitialAssessment<>(Status.PENDING, "MANAGER"); // Requires Manager
+        } else {
+            return new InitialAssessment<>(Status.PENDING, "VP"); // Requires VP
+        }
+    }
+
+    @Override
+    public Either<String, NextStep<String>> evaluateDecision(
+            ApprovalRecord<String, String, String> record,
+            String approverId,
+            String approverRole,
+            DecisionType decisionType,
+            String comment,
+            Instant now
+    ) {
+        if (record.isTerminal()) {
+            return Either.left("Proposal is already in a terminal state");
+        }
+
+        String required = record.requiredAuthority();
+        if (required != null && !required.equalsIgnoreCase(approverRole)) {
+            return Either.left("Insufficient authority! Expected role " + required + " but got " + approverRole);
+        }
+
+        if (decisionType == DecisionType.REJECT) {
+            return Either.right(new NextStep<>(Status.REJECTED, null));
+        }
+
+        return Either.right(new NextStep<>(Status.APPROVED, null));
+    }
+}
+```
+
+### 2. Execute and Test the Flow
+
+Now, run the workflow using the `ApprovalProcess` engine. You can instantiate it with standard, zero-dependency **In-Memory** adapters for rapid local prototyping:
+
+```java
+import io.effects.recipes.approvable.*;
+import io.effects.adapters.InMemoryStateRepository;
+import io.effects.adapters.InMemoryEventPublisher;
+import io.effects.adapters.NoOpTelemetryPort;
+import java.time.Instant;
+
+public class Main {
+    public static void main(String[] args) {
+        // Setup rapid in-memory local adapters (ports and adapters design)
+        var repo = new InMemoryStateRepository<String, ApprovalRecord<String, String, String>>();
+        var publisher = new InMemoryEventPublisher<ApprovalEvent<String, String>>();
+        var process = new ApprovalProcess<>(repo, publisher, new NoOpTelemetryPort());
+
+        String proposalId = "prop-901";
+        DiscountProposal proposal = new DiscountProposal(15.0); // 15% discount
+        Instant now = Instant.now();
+
+        // 1. Register and submit the proposal
+        process.register(proposalId, proposal).unsafeRunSync();
+        var submitResult = process.submit(proposalId, "sales-agent-A", "Special contract discount", now).unsafeRunSync();
+        
+        ApprovalRecord<String, String, String> record = submitResult.getRight();
+        System.out.println("Status: " + record.status()); // PENDING
+        System.out.println("Required Role: " + record.requiredAuthority()); // MANAGER
+
+        // 2. Approve with sufficient authority (MANAGER role)
+        var approveResult = process.approve(proposalId, "mgr-B", "MANAGER", "Within budget limits", now.plusSeconds(5)).unsafeRunSync();
+        
+        ApprovalRecord<String, String, String> approvedRecord = approveResult.getRight();
+        System.out.println("Final Status: " + approvedRecord.status()); // APPROVED
+        System.out.println("Is Terminal: " + approvedRecord.isTerminal()); // true
+    }
+}
+```
