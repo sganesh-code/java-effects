@@ -9,7 +9,7 @@ import io.effects.adapters.InMemoryEventPublisher;
 import io.effects.adapters.InMemoryStateRepository;
 import io.effects.adapters.NoOpTelemetryPort;
 import io.effects.recipes.ProcessCoordinator;
-import io.effects.recipes.ProcessRegistry;
+import io.effects.recipes.Recipe;
 import io.effects.recipes.TransitionResult;
 import java.time.Instant;
 import java.util.Objects;
@@ -23,7 +23,7 @@ import java.util.function.Function;
  * It coordinates monadic persistence lookup, domain aggregation, and event publishing,
  * completely decoupled from business logic invariants (which reside inside OwnershipRecord).
  */
-public final class OwnableProcess<ID, O> implements ProcessRegistry<ID, OwnableRequest<ID, O>> {
+public final class OwnableProcess<ID, O> implements Recipe<ID, OwnableRequest<ID, O>> {
     private final StateRepository<ID, OwnershipRecord<ID, O>> repository;
     private final EventPublisher<OwnershipEvent<ID, O>> publisher;
     private final TelemetryPort telemetry;

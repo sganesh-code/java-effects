@@ -8,7 +8,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import static org.junit.jupiter.api.Assertions.*;
 
-class ProcessRegistryTest {
+class RecipeTest {
 
     // Simple behavioral request stub
     private static class DummyOwnableRequest implements OwnableRequest<String, String> {
@@ -30,31 +30,31 @@ class ProcessRegistryTest {
     }
 
     @Test
-    void testStandardProcessRegistryOperations() {
-        ProcessRegistry<String, OwnableRequest<String, String>> process = new OwnableProcess<>();
+    void testStandardRecipeOperations() {
+        Recipe<String, OwnableRequest<String, String>> recipe = new OwnableProcess<>();
         DummyOwnableRequest asset = new DummyOwnableRequest();
 
         // 1. Verify initially not registered
-        assertFalse(process.isRegistered("asset-101").unsafeRunSync());
+        assertFalse(recipe.isRegistered("asset-101").unsafeRunSync());
 
         // 2. Register
-        process.register("asset-101", asset).unsafeRunSync();
+        recipe.register("asset-101", asset).unsafeRunSync();
 
         // 3. Verify registered
-        assertTrue(process.isRegistered("asset-101").unsafeRunSync());
+        assertTrue(recipe.isRegistered("asset-101").unsafeRunSync());
 
         // 4. Unregister
-        process.unregister("asset-101").unsafeRunSync();
+        recipe.unregister("asset-101").unsafeRunSync();
 
         // 5. Verify no longer registered
-        assertFalse(process.isRegistered("asset-101").unsafeRunSync());
+        assertFalse(recipe.isRegistered("asset-101").unsafeRunSync());
     }
 
     @Test
-    void testAuditingProcessRegistryDecorator() {
+    void testAuditingRecipeDecorator() {
         OwnableProcess<String, String> process = new OwnableProcess<>();
-        ProcessRegistry<String, OwnableRequest<String, String>> decoratedProcess = 
-            new AuditingProcessRegistryDecorator<>(process, "AssetOwnership");
+        Recipe<String, OwnableRequest<String, String>> decoratedRecipe = 
+            new AuditingRecipeDecorator<>(process, "AssetOwnership");
         DummyOwnableRequest asset = new DummyOwnableRequest();
 
         // Redirect System.out to capture auditing log outputs
@@ -64,27 +64,27 @@ class ProcessRegistryTest {
 
         try {
             // Register through decorator
-            decoratedProcess.register("asset-202", asset).unsafeRunSync();
+            decoratedRecipe.register("asset-202", asset).unsafeRunSync();
 
             // Verify decorator printed intercept audit log
             String output = outputStream.toString();
-            assertTrue(output.contains("[AUDIT] [REGISTRY] [INTERCEPT]"));
+            assertTrue(output.contains("[AUDIT] [RECIPE] [INTERCEPT]"));
             assertTrue(output.contains("asset-202"));
             assertTrue(output.contains("AssetOwnership"));
 
             // Verify underlying registration completed successfully
-            assertTrue(decoratedProcess.isRegistered("asset-202").unsafeRunSync());
+            assertTrue(decoratedRecipe.isRegistered("asset-202").unsafeRunSync());
 
             // Clear buffer and test unregister audit log
             outputStream.reset();
-            decoratedProcess.unregister("asset-202").unsafeRunSync();
+            decoratedRecipe.unregister("asset-202").unsafeRunSync();
 
             String unregisterOutput = outputStream.toString();
-            assertTrue(unregisterOutput.contains("[AUDIT] [REGISTRY] [INTERCEPT] Evicting registration"));
+            assertTrue(unregisterOutput.contains("[AUDIT] [RECIPE] [INTERCEPT] Evicting registration"));
             assertTrue(unregisterOutput.contains("asset-202"));
 
             // Verify underlying unregistration completed successfully
-            assertFalse(decoratedProcess.isRegistered("asset-202").unsafeRunSync());
+            assertFalse(decoratedRecipe.isRegistered("asset-202").unsafeRunSync());
         } finally {
             System.setOut(originalOut);
         }

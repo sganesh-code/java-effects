@@ -10,7 +10,7 @@ import io.effects.adapters.InMemoryEventPublisher;
 import io.effects.adapters.InMemoryStateRepository;
 import io.effects.adapters.NoOpTelemetryPort;
 import io.effects.recipes.ProcessCoordinator;
-import io.effects.recipes.ProcessRegistry;
+import io.effects.recipes.Recipe;
 import io.effects.recipes.TransitionResult;
 import java.time.Instant;
 import java.util.Objects;
@@ -24,7 +24,7 @@ import java.util.function.Function;
  * It coordinates monadic persistence lookup, domain aggregation, and event publishing,
  * completely decoupled from business logic invariants (which reside inside EntitlementLedger).
  */
-public final class EntitleableProcess<ID, G, C> implements ProcessRegistry<ID, EntitleableRequest<ID, G, C>> {
+public final class EntitleableProcess<ID, G, C> implements Recipe<ID, EntitleableRequest<ID, G, C>> {
     private final StateRepository<ID, EntitlementLedger<ID, G>> repository;
     private final EventPublisher<EntitlementEvent<ID>> publisher;
     private final TelemetryPort telemetry;

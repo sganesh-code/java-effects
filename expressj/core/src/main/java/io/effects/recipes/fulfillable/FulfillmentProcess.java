@@ -9,7 +9,7 @@ import io.effects.adapters.InMemoryEventPublisher;
 import io.effects.adapters.InMemoryStateRepository;
 import io.effects.adapters.NoOpTelemetryPort;
 import io.effects.recipes.ProcessCoordinator;
-import io.effects.recipes.ProcessRegistry;
+import io.effects.recipes.Recipe;
 import io.effects.recipes.TransitionResult;
 import java.time.Instant;
 import java.util.Objects;
@@ -22,7 +22,7 @@ import java.util.function.Function;
  * It coordinates monadic persistence lookup, domain aggregation, and event publishing,
  * completely decoupled from business logic invariants (which reside inside FulfillmentLedger).
  */
-public final class FulfillmentProcess<ID, Q> implements ProcessRegistry<ID, FulfillableRequest<ID, Q>> {
+public final class FulfillmentProcess<ID, Q> implements Recipe<ID, FulfillableRequest<ID, Q>> {
     private final StateRepository<ID, FulfillmentLedger<ID, Q>> repository;
     private final EventPublisher<FulfillmentEvent<ID, Q>> publisher;
     private final TelemetryPort telemetry;

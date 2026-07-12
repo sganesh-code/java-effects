@@ -9,7 +9,7 @@ import io.effects.ports.TelemetryPort;
 import io.effects.adapters.InMemoryEventPublisher;
 import io.effects.adapters.InMemoryStateRepository;
 import io.effects.adapters.NoOpTelemetryPort;
-import io.effects.recipes.ProcessRegistry;
+import io.effects.recipes.Recipe;
 import io.effects.recipes.TransitionResult;
 import java.time.Instant;
 import java.util.Objects;
@@ -19,7 +19,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * An Object-Oriented "Recipe" representing an Observable Process Manager.
  * Coordinates declarative subscriptions, filtering policies, and event routing.
  */
-public final class ObservableProcess<ID, S, E> implements ProcessRegistry<S, ObservableRequest<ID, E>> {
+public final class ObservableProcess<ID, S, E> implements Recipe<S, ObservableRequest<ID, E>> {
     private final StateRepository<ID, ObservableLedger<ID, S>> repository;
     private final EventPublisher<ObservableEvent<ID, S>> publisher;
     private final EventSubscriber<E> subscriberPort;

@@ -9,7 +9,7 @@ import io.effects.adapters.InMemoryEventPublisher;
 import io.effects.adapters.InMemoryStateRepository;
 import io.effects.adapters.NoOpTelemetryPort;
 import io.effects.recipes.ProcessCoordinator;
-import io.effects.recipes.ProcessRegistry;
+import io.effects.recipes.Recipe;
 import io.effects.recipes.TransitionResult;
 import java.time.Instant;
 import java.util.Objects;
@@ -23,7 +23,7 @@ import java.util.function.Function;
  * It coordinates monadic persistence lookup, domain aggregation, and event publishing,
  * completely decoupled from business logic invariants (which reside inside ApprovalRecord).
  */
-public final class ApprovalProcess<ID, A, C> implements ProcessRegistry<ID, ApprovableRequest<ID, A, C>> {
+public final class ApprovalProcess<ID, A, C> implements Recipe<ID, ApprovableRequest<ID, A, C>> {
     private final StateRepository<ID, ApprovalRecord<ID, A, C>> repository;
     private final EventPublisher<ApprovalEvent<ID, A>> publisher;
     private final TelemetryPort telemetry;

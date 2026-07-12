@@ -3,16 +3,17 @@ package io.effects.recipes;
 import io.effects.IO;
 
 /**
- * A unified contract representing a Process Manager that coordinates the active 
- * registration, unregistration, and state verification of behavioral domain objects.
+ * A unified contract representing a business-facing Recipe (Process Manager) 
+ * that coordinates the active registration, unregistration, and state verification 
+ * of participating behavioral domain objects.
  *
  * @param <ID> the unique identifier type for the transaction or entity
  * @param <R> the contract interface representing the participating behavioral domain object
  */
-public interface ProcessRegistry<ID, R> {
+public interface Recipe<ID, R> {
 
     /**
-     * Registers a behavioral business domain object to participate in this process manager's lifecycle.
+     * Registers a behavioral business domain object to participate in this Recipe's active lifecycle.
      *
      * @param transactionId the unique identifier for the transaction
      * @param behavioralObject the domain object containing custom business rules and callbacks

@@ -9,7 +9,7 @@ import io.effects.ports.TelemetryPort;
 import io.effects.adapters.InMemoryEventPublisher;
 import io.effects.adapters.InMemoryStateRepository;
 import io.effects.adapters.NoOpTelemetryPort;
-import io.effects.recipes.ProcessRegistry;
+import io.effects.recipes.Recipe;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
@@ -24,7 +24,7 @@ import java.util.concurrent.ConcurrentMap;
  * engine, and thus exposes purely monadic APIs (returning IO) to allow lazy, virtual-thread execution,
  * cancellation, and pipeline composition.
  */
-public final class ReservationProcess<ID, Q> implements ProcessRegistry<ID, ReservableResource<ID, Q>> {
+public final class ReservationProcess<ID, Q> implements Recipe<ID, ReservableResource<ID, Q>> {
     private final StateRepository<ID, ResourceLedger<ID, Q>> ledgerRepository;
     private final StateRepository<String, Hold<ID, Q>> holdRepository;
     private final EventPublisher<ReservationEvent<ID, Q>> eventPublisher;

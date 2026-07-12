@@ -9,7 +9,7 @@ import io.effects.adapters.InMemoryEventPublisher;
 import io.effects.adapters.InMemoryStateRepository;
 import io.effects.adapters.NoOpTelemetryPort;
 import io.effects.recipes.ProcessCoordinator;
-import io.effects.recipes.ProcessRegistry;
+import io.effects.recipes.Recipe;
 import io.effects.recipes.TransitionResult;
 import java.time.Instant;
 import java.util.Objects;
@@ -23,7 +23,7 @@ import java.util.function.Function;
  * It coordinates monadic persistence lookup, domain aggregation, and event publishing,
  * completely decoupled from business logic invariants (which reside inside PaymentLedger).
  */
-public final class PayableProcess<ID, M> implements ProcessRegistry<ID, PayableRequest<ID, M>> {
+public final class PayableProcess<ID, M> implements Recipe<ID, PayableRequest<ID, M>> {
     private final StateRepository<ID, PaymentLedger<ID, M>> repository;
     private final EventPublisher<PaymentEvent<ID, M>> publisher;
     private final TelemetryPort telemetry;
