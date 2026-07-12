@@ -2,19 +2,20 @@ package io.effects.recipes.approvable;
 
 import io.effects.Either;
 import io.effects.IO;
-import io.effects.ForIO;
 import io.effects.ports.EventPublisher;
 import io.effects.ports.StateRepository;
 import io.effects.ports.TelemetryPort;
 import io.effects.adapters.InMemoryEventPublisher;
 import io.effects.adapters.InMemoryStateRepository;
 import io.effects.adapters.NoOpTelemetryPort;
+import io.effects.recipes.ProcessCoordinator;
 import io.effects.recipes.TransitionResult;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.function.Function;
 
 /**
  * An Object-Oriented "Recipe" representing an Approval Process Manager.
@@ -25,6 +26,7 @@ public final class ApprovalProcess<ID, A, C> {
     private final StateRepository<ID, ApprovalRecord<ID, A, C>> repository;
     private final EventPublisher<ApprovalEvent<ID, A>> publisher;
     private final TelemetryPort telemetry;
+    private final ProcessCoordinator<ID, ApprovalRecord<ID, A, C>, ApprovalEvent<ID, A>> coordinator;
     private final ConcurrentMap<ID, ApprovableRequest<ID, A, C>> requests = new ConcurrentHashMap<>();
 
     /**
@@ -45,6 +47,7 @@ public final class ApprovalProcess<ID, A, C> {
         this.repository = Objects.requireNonNull(repository);
         this.publisher = Objects.requireNonNull(publisher);
         this.telemetry = Objects.requireNonNull(telemetry);
+        this.coordinator = new ProcessCoordinator<>(repository, publisher, telemetry, "approvable");
     }
 
     /**
@@ -73,33 +76,17 @@ public final class ApprovalProcess<ID, A, C> {
             return IO.of(Either.left("Request domain object not registered: " + requestId));
         }
 
-        return ForIO.set(IO.delay(System::currentTimeMillis))
-            .bind(startTime -> repository.find(requestId))
-            .bind((startTime, optRecord) -> {
+        return coordinator.coordinate(
+            requestId,
+            "submit",
+            optRecord -> {
                 if (optRecord.isPresent()) {
-                    return IO.of(Either.<String, ApprovalRecord<ID, A, C>>left("Request already submitted: " + requestId));
+                    return Either.left("Request already submitted: " + requestId);
                 }
-
-                // Delegate creation and transition to rich aggregate factory
-                Either<String, TransitionResult<ApprovalRecord<ID, A, C>, ApprovalEvent<ID, A>>> submitResult = ApprovalRecord.submit(
-                    requestId, initiatorId, submitComment, request, now
-                );
-
-                if (submitResult.isLeft()) {
-                    return IO.of(Either.<String, ApprovalRecord<ID, A, C>>left(submitResult.getLeft()));
-                }
-
-                TransitionResult<ApprovalRecord<ID, A, C>, ApprovalEvent<ID, A>> result = submitResult.getRight();
-                ApprovalRecord<ID, A, C> record = result.aggregate();
-                ApprovalEvent<ID, A> event = result.event();
-
-                return repository.save(record.requestId(), record)
-                    .flatMap(v -> publisher.publish(event))
-                    .flatMap(v -> telemetry.recordSuccess("approvable", requestId.toString() + ":submit"))
-                    .flatMap(v -> telemetry.recordDuration("approvable", requestId.toString(), System.currentTimeMillis() - startTime))
-                    .map(v -> Either.<String, ApprovalRecord<ID, A, C>>right(record));
-            })
-            .yield((startTime, optRecord, result) -> result);
+                return ApprovalRecord.submit(requestId, initiatorId, submitComment, request, now);
+            },
+            Function.identity()
+        );
     }
 
     /**
@@ -117,31 +104,19 @@ public final class ApprovalProcess<ID, A, C> {
             return IO.of(Either.left("Request domain object not registered: " + requestId));
         }
 
-        return ForIO.set(IO.delay(System::currentTimeMillis))
-            .bind(startTime -> repository.find(requestId))
-            .bind((startTime, optRecord) -> {
+        return coordinator.coordinate(
+            requestId,
+            "approve",
+            optRecord -> {
                 if (optRecord.isEmpty()) {
-                    return IO.of(Either.<String, ApprovalRecord<ID, A, C>>left("Request record not found: " + requestId));
+                    return Either.left("Request record not found: " + requestId);
                 }
-
                 ApprovalRecord<ID, A, C> record = optRecord.get();
-
-                // Delegate execution directly to rich aggregate!
                 Either<String, ApprovalEvent<ID, A>> eitherEvent = record.approve(approverId, approverRole, detail, request, now);
-                if (eitherEvent.isLeft()) {
-                    return IO.of(Either.<String, ApprovalRecord<ID, A, C>>left(eitherEvent.getLeft()));
-                }
-
-                ApprovalEvent<ID, A> event = eitherEvent.getRight();
-                IO<Void> publishIO = event != null ? publisher.publish(event) : IO.of(null);
-
-                return repository.save(record.requestId(), record)
-                    .flatMap(v -> publishIO)
-                    .flatMap(v -> telemetry.recordSuccess("approvable", requestId.toString() + ":approve"))
-                    .flatMap(v -> telemetry.recordDuration("approvable", requestId.toString(), System.currentTimeMillis() - startTime))
-                    .map(v -> Either.<String, ApprovalRecord<ID, A, C>>right(record));
-            })
-            .yield((startTime, optRecord, result) -> result);
+                return eitherEvent.map(event -> new TransitionResult<>(record, event));
+            },
+            Function.identity()
+        );
     }
 
     /**
@@ -159,31 +134,19 @@ public final class ApprovalProcess<ID, A, C> {
             return IO.of(Either.left("Request domain object not registered: " + requestId));
         }
 
-        return ForIO.set(IO.delay(System::currentTimeMillis))
-            .bind(startTime -> repository.find(requestId))
-            .bind((startTime, optRecord) -> {
+        return coordinator.coordinate(
+            requestId,
+            "reject",
+            optRecord -> {
                 if (optRecord.isEmpty()) {
-                    return IO.of(Either.<String, ApprovalRecord<ID, A, C>>left("Request record not found: " + requestId));
+                    return Either.left("Request record not found: " + requestId);
                 }
-
                 ApprovalRecord<ID, A, C> record = optRecord.get();
-
-                // Delegate execution directly to rich aggregate!
                 Either<String, ApprovalEvent<ID, A>> eitherEvent = record.reject(approverId, approverRole, reason, request, now);
-                if (eitherEvent.isLeft()) {
-                    return IO.of(Either.<String, ApprovalRecord<ID, A, C>>left(eitherEvent.getLeft()));
-                }
-
-                ApprovalEvent<ID, A> event = eitherEvent.getRight();
-                IO<Void> publishIO = event != null ? publisher.publish(event) : IO.of(null);
-
-                return repository.save(record.requestId(), record)
-                    .flatMap(v -> publishIO)
-                    .flatMap(v -> telemetry.recordFailure("approvable", requestId.toString() + ":reject", reason.toString()))
-                    .flatMap(v -> telemetry.recordDuration("approvable", requestId.toString(), System.currentTimeMillis() - startTime))
-                    .map(v -> Either.<String, ApprovalRecord<ID, A, C>>right(record));
-            })
-            .yield((startTime, optRecord, result) -> result);
+                return eitherEvent.map(event -> new TransitionResult<>(record, event));
+            },
+            Function.identity()
+        );
     }
 
     /**
@@ -202,30 +165,18 @@ public final class ApprovalProcess<ID, A, C> {
             return IO.of(Either.left("Request domain object not registered: " + requestId));
         }
 
-        return ForIO.set(IO.delay(System::currentTimeMillis))
-            .bind(startTime -> repository.find(requestId))
-            .bind((startTime, optRecord) -> {
+        return coordinator.coordinate(
+            requestId,
+            "escalate",
+            optRecord -> {
                 if (optRecord.isEmpty()) {
-                    return IO.of(Either.<String, ApprovalRecord<ID, A, C>>left("Request record not found: " + requestId));
+                    return Either.left("Request record not found: " + requestId);
                 }
-
                 ApprovalRecord<ID, A, C> record = optRecord.get();
-
-                // Delegate execution directly to rich aggregate!
                 Either<String, ApprovalEvent<ID, A>> eitherEvent = record.escalate(approverId, approverRole, targetAuthority, reason, request, now);
-                if (eitherEvent.isLeft()) {
-                    return IO.of(Either.<String, ApprovalRecord<ID, A, C>>left(eitherEvent.getLeft()));
-                }
-
-                ApprovalEvent<ID, A> event = eitherEvent.getRight();
-                IO<Void> publishIO = event != null ? publisher.publish(event) : IO.of(null);
-
-                return repository.save(record.requestId(), record)
-                    .flatMap(v -> publishIO)
-                    .flatMap(v -> telemetry.recordSuccess("approvable", requestId.toString() + ":escalate"))
-                    .flatMap(v -> telemetry.recordDuration("approvable", requestId.toString(), System.currentTimeMillis() - startTime))
-                    .map(v -> Either.<String, ApprovalRecord<ID, A, C>>right(record));
-            })
-            .yield((startTime, optRecord, result) -> result);
+                return eitherEvent.map(event -> new TransitionResult<>(record, event));
+            },
+            Function.identity()
+        );
     }
 }

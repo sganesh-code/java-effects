@@ -9,11 +9,14 @@ import io.effects.ports.TelemetryPort;
 import io.effects.adapters.InMemoryEventPublisher;
 import io.effects.adapters.InMemoryStateRepository;
 import io.effects.adapters.NoOpTelemetryPort;
+import io.effects.recipes.ProcessCoordinator;
+import io.effects.recipes.TransitionResult;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.function.Function;
 
 /**
  * An Object-Oriented "Recipe" representing an Entitleable Process Manager.
@@ -24,6 +27,7 @@ public final class EntitleableProcess<ID, G, C> {
     private final StateRepository<ID, EntitlementLedger<ID, G>> repository;
     private final EventPublisher<EntitlementEvent<ID>> publisher;
     private final TelemetryPort telemetry;
+    private final ProcessCoordinator<ID, EntitlementLedger<ID, G>, EntitlementEvent<ID>> coordinator;
     private final ConcurrentMap<ID, EntitleableRequest<ID, G, C>> rules = new ConcurrentHashMap<>();
 
     /**
@@ -44,6 +48,7 @@ public final class EntitleableProcess<ID, G, C> {
         this.repository = Objects.requireNonNull(repository);
         this.publisher = Objects.requireNonNull(publisher);
         this.telemetry = Objects.requireNonNull(telemetry);
+        this.coordinator = new ProcessCoordinator<>(repository, publisher, telemetry, "entitleable");
     }
 
     /**
@@ -80,31 +85,22 @@ public final class EntitleableProcess<ID, G, C> {
             return IO.of(Either.left("Entitleable request domain object not registered for actor: " + actorId));
         }
 
-        return ForIO.set(IO.delay(System::currentTimeMillis))
-            .bind(startTime -> repository.find(actorId))
-            .bind((startTime, optLedger) -> {
+        return coordinator.coordinate(
+            actorId,
+            "grant",
+            optLedger -> {
                 if (optLedger.isEmpty()) {
-                    return IO.of(Either.<String, EntitlementStep<G>>left("Entitlement ledger not found for actor: " + actorId));
+                    return Either.left("Entitlement ledger not found for actor: " + actorId);
                 }
-
                 EntitlementLedger<ID, G> ledger = optLedger.get();
                 String stepId = UUID.randomUUID().toString();
-
                 Either<String, EntitlementStep<G>> tryGrantResult = ledger.grant(stepId, grantorId, grant, rule, now);
-                if (tryGrantResult.isLeft()) {
-                    return IO.of(Either.<String, EntitlementStep<G>>left(tryGrantResult.getLeft()));
-                }
-
-                EntitlementStep<G> step = tryGrantResult.getRight();
-                EntitlementEvent<ID> event = new EntitlementEvent.EntitlementGranted<>(actorId, stepId, grant, now);
-
-                return repository.save(actorId, ledger)
-                    .flatMap(v -> publisher.publish(event))
-                    .flatMap(v -> telemetry.recordSuccess("entitleable", actorId.toString() + ":grant"))
-                    .flatMap(v -> telemetry.recordDuration("entitleable", actorId.toString(), System.currentTimeMillis() - startTime))
-                    .map(v -> Either.<String, EntitlementStep<G>>right(step));
-            })
-            .yield((startTime, optLedger, result) -> result);
+                return tryGrantResult.map(step -> new TransitionResult<>(ledger, new EntitlementEvent.EntitlementGranted<>(actorId, stepId, grant, now)));
+            },
+            ledger -> {
+                return ledger.history().get(ledger.history().size() - 1);
+            }
+        );
     }
 
     /**
@@ -116,30 +112,22 @@ public final class EntitleableProcess<ID, G, C> {
         Objects.requireNonNull(stepId);
         Objects.requireNonNull(now);
 
-        return ForIO.set(IO.delay(System::currentTimeMillis))
-            .bind(startTime -> repository.find(actorId))
-            .bind((startTime, optLedger) -> {
+        return coordinator.coordinate(
+            actorId,
+            "revoke",
+            optLedger -> {
                 if (optLedger.isEmpty()) {
-                    return IO.of(Either.<String, EntitlementStep<G>>left("Entitlement ledger not found for actor: " + actorId));
+                    return Either.left("Entitlement ledger not found for actor: " + actorId);
                 }
-
                 EntitlementLedger<ID, G> ledger = optLedger.get();
-
                 Either<String, EntitlementStep<G>> tryRevokeResult = ledger.revoke(stepId, grantorId, now);
-                if (tryRevokeResult.isLeft()) {
-                    return IO.of(Either.<String, EntitlementStep<G>>left(tryRevokeResult.getLeft()));
-                }
-
-                EntitlementStep<G> step = tryRevokeResult.getRight();
-                EntitlementEvent<ID> event = new EntitlementEvent.EntitlementRevoked<>(actorId, stepId, step.grant(), now);
-
-                return repository.save(actorId, ledger)
-                    .flatMap(v -> publisher.publish(event))
-                    .flatMap(v -> telemetry.recordSuccess("entitleable", actorId.toString() + ":revoke"))
-                    .flatMap(v -> telemetry.recordDuration("entitleable", actorId.toString(), System.currentTimeMillis() - startTime))
-                    .map(v -> Either.<String, EntitlementStep<G>>right(step));
-            })
-            .yield((startTime, optLedger, result) -> result);
+                return tryRevokeResult.map(step -> new TransitionResult<>(ledger, new EntitlementEvent.EntitlementRevoked<>(actorId, stepId, step.grant(), now)));
+            },
+            ledger -> {
+                // The newly created REVOKE step is the last element appended to history
+                return ledger.history().get(ledger.history().size() - 1);
+            }
+        );
     }
 
     /**

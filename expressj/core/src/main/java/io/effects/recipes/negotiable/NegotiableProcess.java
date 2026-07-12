@@ -2,18 +2,20 @@ package io.effects.recipes.negotiable;
 
 import io.effects.Either;
 import io.effects.IO;
-import io.effects.ForIO;
 import io.effects.ports.EventPublisher;
 import io.effects.ports.StateRepository;
 import io.effects.ports.TelemetryPort;
 import io.effects.adapters.InMemoryEventPublisher;
 import io.effects.adapters.InMemoryStateRepository;
 import io.effects.adapters.NoOpTelemetryPort;
+import io.effects.recipes.ProcessCoordinator;
+import io.effects.recipes.TransitionResult;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.function.Function;
 
 /**
  * An Object-Oriented "Recipe" representing a Negotiable Process Manager.
@@ -24,6 +26,7 @@ public final class NegotiableProcess<ID, P> {
     private final StateRepository<ID, NegotiationLedger<ID, P>> repository;
     private final EventPublisher<NegotiationEvent<ID>> publisher;
     private final TelemetryPort telemetry;
+    private final ProcessCoordinator<ID, NegotiationLedger<ID, P>, NegotiationEvent<ID>> coordinator;
     private final ConcurrentMap<ID, NegotiableRequest<ID, P>> sessions = new ConcurrentHashMap<>();
 
     /**
@@ -44,6 +47,7 @@ public final class NegotiableProcess<ID, P> {
         this.repository = Objects.requireNonNull(repository);
         this.publisher = Objects.requireNonNull(publisher);
         this.telemetry = Objects.requireNonNull(telemetry);
+        this.coordinator = new ProcessCoordinator<>(repository, publisher, telemetry, "negotiable");
     }
 
     /**
@@ -80,30 +84,20 @@ public final class NegotiableProcess<ID, P> {
             return IO.of(Either.left("Negotiation request domain object not registered: " + sessionId));
         }
 
-        return ForIO.set(IO.delay(System::currentTimeMillis))
-            .bind(startTime -> repository.find(sessionId))
-            .bind((startTime, optLedger) -> {
+        return coordinator.coordinate(
+            sessionId,
+            "offer",
+            optLedger -> {
                 if (optLedger.isEmpty()) {
-                    return IO.of(Either.<String, NegotiationLedger<ID, P>>left("Negotiation ledger not found: " + sessionId));
+                    return Either.left("Negotiation ledger not found: " + sessionId);
                 }
-
                 NegotiationLedger<ID, P> ledger = optLedger.get();
                 String stepId = UUID.randomUUID().toString();
-
                 Either<String, NegotiationStep<P>> tryOfferResult = ledger.makeOffer(stepId, actorId, proposal, request, now);
-                if (tryOfferResult.isLeft()) {
-                    return IO.of(Either.<String, NegotiationLedger<ID, P>>left(tryOfferResult.getLeft()));
-                }
-
-                NegotiationEvent<ID> event = new NegotiationEvent.OfferMade<>(sessionId, actorId, proposal, now);
-
-                return repository.save(sessionId, ledger)
-                    .flatMap(v -> publisher.publish(event))
-                    .flatMap(v -> telemetry.recordSuccess("negotiable", sessionId + ":offer"))
-                    .flatMap(v -> telemetry.recordDuration("negotiable", sessionId.toString(), System.currentTimeMillis() - startTime))
-                    .map(v -> Either.<String, NegotiationLedger<ID, P>>right(ledger));
-            })
-            .yield((startTime, optLedger, result) -> result);
+                return tryOfferResult.map(step -> new TransitionResult<>(ledger, new NegotiationEvent.OfferMade<>(sessionId, actorId, proposal, now)));
+            },
+            Function.identity()
+        );
     }
 
     /**
@@ -120,30 +114,20 @@ public final class NegotiableProcess<ID, P> {
             return IO.of(Either.left("Negotiation request domain object not registered: " + sessionId));
         }
 
-        return ForIO.set(IO.delay(System::currentTimeMillis))
-            .bind(startTime -> repository.find(sessionId))
-            .bind((startTime, optLedger) -> {
+        return coordinator.coordinate(
+            sessionId,
+            "counter",
+            optLedger -> {
                 if (optLedger.isEmpty()) {
-                    return IO.of(Either.<String, NegotiationLedger<ID, P>>left("Negotiation ledger not found: " + sessionId));
+                    return Either.left("Negotiation ledger not found: " + sessionId);
                 }
-
                 NegotiationLedger<ID, P> ledger = optLedger.get();
                 String stepId = UUID.randomUUID().toString();
-
                 Either<String, NegotiationStep<P>> tryCounterResult = ledger.makeCounter(stepId, actorId, proposal, request, now);
-                if (tryCounterResult.isLeft()) {
-                    return IO.of(Either.<String, NegotiationLedger<ID, P>>left(tryCounterResult.getLeft()));
-                }
-
-                NegotiationEvent<ID> event = new NegotiationEvent.CounterOfferMade<>(sessionId, actorId, proposal, now);
-
-                return repository.save(sessionId, ledger)
-                    .flatMap(v -> publisher.publish(event))
-                    .flatMap(v -> telemetry.recordSuccess("negotiable", sessionId.toString() + ":counter"))
-                    .flatMap(v -> telemetry.recordDuration("negotiable", sessionId.toString(), System.currentTimeMillis() - startTime))
-                    .map(v -> Either.<String, NegotiationLedger<ID, P>>right(ledger));
-            })
-            .yield((startTime, optLedger, result) -> result);
+                return tryCounterResult.map(step -> new TransitionResult<>(ledger, new NegotiationEvent.CounterOfferMade<>(sessionId, actorId, proposal, now)));
+            },
+            Function.identity()
+        );
     }
 
     /**
@@ -159,30 +143,20 @@ public final class NegotiableProcess<ID, P> {
             return IO.of(Either.left("Negotiation request domain object not registered: " + sessionId));
         }
 
-        return ForIO.set(IO.delay(System::currentTimeMillis))
-            .bind(startTime -> repository.find(sessionId))
-            .bind((startTime, optLedger) -> {
+        return coordinator.coordinate(
+            sessionId,
+            "accept",
+            optLedger -> {
                 if (optLedger.isEmpty()) {
-                    return IO.of(Either.<String, NegotiationLedger<ID, P>>left("Negotiation ledger not found: " + sessionId));
+                    return Either.left("Negotiation ledger not found: " + sessionId);
                 }
-
                 NegotiationLedger<ID, P> ledger = optLedger.get();
                 String stepId = UUID.randomUUID().toString();
-
                 Either<String, NegotiationStep<P>> tryAcceptResult = ledger.accept(stepId, actorId, request, now);
-                if (tryAcceptResult.isLeft()) {
-                    return IO.of(Either.<String, NegotiationLedger<ID, P>>left(tryAcceptResult.getLeft()));
-                }
-
-                NegotiationEvent<ID> event = new NegotiationEvent.NegotiationAccepted<>(sessionId, actorId, now);
-
-                return repository.save(sessionId, ledger)
-                    .flatMap(v -> publisher.publish(event))
-                    .flatMap(v -> telemetry.recordSuccess("negotiable", sessionId.toString() + ":accept"))
-                    .flatMap(v -> telemetry.recordDuration("negotiable", sessionId.toString(), System.currentTimeMillis() - startTime))
-                    .map(v -> Either.<String, NegotiationLedger<ID, P>>right(ledger));
-            })
-            .yield((startTime, optLedger, result) -> result);
+                return tryAcceptResult.map(step -> new TransitionResult<>(ledger, new NegotiationEvent.NegotiationAccepted<>(sessionId, actorId, now)));
+            },
+            Function.identity()
+        );
     }
 
     /**
@@ -193,29 +167,19 @@ public final class NegotiableProcess<ID, P> {
         Objects.requireNonNull(actorId);
         Objects.requireNonNull(now);
 
-        return ForIO.set(IO.delay(System::currentTimeMillis))
-            .bind(startTime -> repository.find(sessionId))
-            .bind((startTime, optLedger) -> {
+        return coordinator.coordinate(
+            sessionId,
+            "withdraw",
+            optLedger -> {
                 if (optLedger.isEmpty()) {
-                    return IO.of(Either.<String, NegotiationLedger<ID, P>>left("Negotiation ledger not found: " + sessionId));
+                    return Either.left("Negotiation ledger not found: " + sessionId);
                 }
-
                 NegotiationLedger<ID, P> ledger = optLedger.get();
                 String stepId = UUID.randomUUID().toString();
-
                 Either<String, NegotiationStep<P>> tryWithdrawResult = ledger.withdraw(stepId, actorId, now);
-                if (tryWithdrawResult.isLeft()) {
-                    return IO.of(Either.<String, NegotiationLedger<ID, P>>left(tryWithdrawResult.getLeft()));
-                }
-
-                NegotiationEvent<ID> event = new NegotiationEvent.NegotiationWithdrawn<>(sessionId, actorId, now);
-
-                return repository.save(sessionId, ledger)
-                    .flatMap(v -> publisher.publish(event))
-                    .flatMap(v -> telemetry.recordSuccess("negotiable", sessionId.toString() + ":withdraw"))
-                    .flatMap(v -> telemetry.recordDuration("negotiable", sessionId.toString(), System.currentTimeMillis() - startTime))
-                    .map(v -> Either.<String, NegotiationLedger<ID, P>>right(ledger));
-            })
-            .yield((startTime, optLedger, result) -> result);
+                return tryWithdrawResult.map(step -> new TransitionResult<>(ledger, new NegotiationEvent.NegotiationWithdrawn<>(sessionId, actorId, now)));
+            },
+            Function.identity()
+        );
     }
 }
