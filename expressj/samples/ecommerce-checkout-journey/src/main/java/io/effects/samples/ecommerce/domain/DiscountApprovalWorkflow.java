@@ -1,13 +1,14 @@
 package io.effects.samples.ecommerce.domain;
 
-import io.effects.Either;
-import io.effects.IO;
+import io.effects.core.Either;
+import io.effects.core.IO;
 import io.effects.ports.EventPublisher;
 import io.effects.ports.EventSubscriber;
 import io.effects.adapters.InMemoryEventPublisher;
 import io.effects.adapters.InMemoryStateRepository;
 import io.effects.adapters.NoOpTelemetryPort;
 import io.effects.recipes.approvable.*;
+import io.effects.recipes.approvable.models.*;
 import java.time.Instant;
 
 /**
@@ -44,7 +45,7 @@ public class DiscountApprovalWorkflow implements ApprovableRequest<String, Strin
      */
     private void setupApprovalTriggers() {
         subscriberPort.subscribe("RequestSubmitted", rawEvent -> IO.delay(() -> {
-            if (rawEvent instanceof io.effects.recipes.approvable.RequestSubmitted<?, ?> event) {
+            if (rawEvent instanceof io.effects.recipes.approvable.models.RequestSubmitted<?, ?> event) {
                 String ordId = event.requestId().toString();
                 String currentRequired = event.requiredAuthority().toString();
                 Instant now = event.occurredAt();

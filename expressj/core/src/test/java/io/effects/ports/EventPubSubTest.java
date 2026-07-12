@@ -1,6 +1,6 @@
 package io.effects.ports;
 
-import io.effects.IO;
+import io.effects.core.IO;
 import io.effects.adapters.InMemoryEventSubscriber;
 import org.junit.jupiter.api.Test;
 import java.util.ArrayList;

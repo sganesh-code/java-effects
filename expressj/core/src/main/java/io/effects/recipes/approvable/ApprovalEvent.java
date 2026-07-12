@@ -1,5 +1,7 @@
 package io.effects.recipes.approvable;
 
+import io.effects.recipes.approvable.models.*;
+
 import java.time.Instant;
 
 /**

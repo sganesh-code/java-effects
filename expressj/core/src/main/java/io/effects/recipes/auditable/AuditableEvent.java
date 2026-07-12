@@ -1,5 +1,7 @@
 package io.effects.recipes.auditable;
 
+import io.effects.recipes.auditable.models.*;
+
 import java.time.Instant;
 
 /**

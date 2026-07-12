@@ -1,6 +1,6 @@
 package io.effects.recipes;
 
-import io.effects.IO;
+import io.effects.core.IO;
 import io.effects.recipes.ownable.OwnableProcess;
 import io.effects.recipes.ownable.OwnableRequest;
 import org.junit.jupiter.api.Test;
@@ -13,19 +13,19 @@ class RecipeTest {
     // Simple behavioral request stub
     private static class DummyOwnableRequest implements OwnableRequest<String, String> {
         @Override
-        public io.effects.Either<String, Void> evaluateInitialAssignment(String owner, java.time.Instant now) {
-            return io.effects.Either.right(null);
+        public io.effects.core.Either<String, Void> evaluateInitialAssignment(String owner, java.time.Instant now) {
+            return io.effects.core.Either.right(null);
         }
 
         @Override
-        public io.effects.Either<String, Void> evaluateTransfer(
+        public io.effects.core.Either<String, Void> evaluateTransfer(
             io.effects.recipes.ownable.OwnershipRecord<String, String> record, 
             String currentOwner, 
             String proposedOwner, 
             String actor, 
             java.time.Instant now
         ) {
-            return io.effects.Either.right(null);
+            return io.effects.core.Either.right(null);
         }
     }
 

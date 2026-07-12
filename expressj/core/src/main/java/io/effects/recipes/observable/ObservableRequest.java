@@ -1,6 +1,8 @@
 package io.effects.recipes.observable;
 
-import io.effects.Either;
+import io.effects.recipes.observable.models.*;
+
+import io.effects.core.Either;
 
 /**
  * A purely behavioral, non-anemic object representing an Event Subscriber or Observer.

@@ -1,6 +1,6 @@
 package io.effects.recipes;
 
-import io.effects.IO;
+import io.effects.core.IO;
 import java.util.Objects;
 
 /**

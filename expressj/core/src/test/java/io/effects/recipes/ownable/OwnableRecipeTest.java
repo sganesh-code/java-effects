@@ -1,7 +1,9 @@
 package io.effects.recipes.ownable;
 
-import io.effects.Either;
-import io.effects.IO;
+import io.effects.recipes.ownable.models.*;
+
+import io.effects.core.Either;
+import io.effects.core.IO;
 import io.effects.ports.TelemetryPort;
 import io.effects.adapters.InMemoryEventPublisher;
 import io.effects.adapters.InMemoryStateRepository;

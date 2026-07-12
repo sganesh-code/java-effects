@@ -1,6 +1,8 @@
 package io.effects.recipes.fulfillable;
 
-import io.effects.Either;
+import io.effects.recipes.fulfillable.models.*;
+
+import io.effects.core.Either;
 import java.time.Instant;
 
 /**

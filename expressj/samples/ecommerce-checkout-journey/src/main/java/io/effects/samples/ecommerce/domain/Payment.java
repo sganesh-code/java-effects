@@ -1,13 +1,14 @@
 package io.effects.samples.ecommerce.domain;
 
-import io.effects.Either;
-import io.effects.IO;
+import io.effects.core.Either;
+import io.effects.core.IO;
 import io.effects.ports.EventPublisher;
 import io.effects.ports.EventSubscriber;
 import io.effects.adapters.InMemoryEventPublisher;
 import io.effects.adapters.InMemoryStateRepository;
 import io.effects.adapters.NoOpTelemetryPort;
 import io.effects.recipes.payable.*;
+import io.effects.recipes.payable.models.*;
 import java.time.Instant;
 
 /**
@@ -42,7 +43,7 @@ public class Payment implements PayableRequest<String, Double> {
      */
     private void setupPaymentTriggers() {
         subscriberPort.subscribe("RequestApproved", rawEvent -> IO.delay(() -> {
-            if (rawEvent instanceof io.effects.recipes.approvable.RequestApproved<?, ?> event) {
+            if (rawEvent instanceof io.effects.recipes.approvable.models.RequestApproved<?, ?> event) {
                 String ordId = event.requestId().toString();
                 Instant now = event.occurredAt();
                 

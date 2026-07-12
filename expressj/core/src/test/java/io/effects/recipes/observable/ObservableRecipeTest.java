@@ -1,7 +1,9 @@
 package io.effects.recipes.observable;
 
-import io.effects.Either;
-import io.effects.IO;
+import io.effects.recipes.observable.models.*;
+
+import io.effects.core.Either;
+import io.effects.core.IO;
 import io.effects.adapters.InMemoryEventSubscriber;
 import org.junit.jupiter.api.Test;
 import java.time.Instant;

@@ -1,7 +1,7 @@
 package io.effects.adapters.redis;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.effects.IO;
+import io.effects.core.IO;
 import io.effects.ports.EventPublisher;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;

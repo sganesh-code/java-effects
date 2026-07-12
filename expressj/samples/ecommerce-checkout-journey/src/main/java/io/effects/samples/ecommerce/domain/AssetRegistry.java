@@ -1,10 +1,12 @@
 package io.effects.samples.ecommerce.domain;
 
-import io.effects.Either;
-import io.effects.IO;
+import io.effects.core.Either;
+import io.effects.core.IO;
 import io.effects.ports.EventSubscriber;
 import io.effects.recipes.ownable.*;
+import io.effects.recipes.ownable.models.*;
 import io.effects.recipes.entitleable.*;
+import io.effects.recipes.entitleable.models.*;
 import io.effects.samples.ecommerce.domain.models.*;
 import java.time.Instant;
 
@@ -45,7 +47,7 @@ public class AssetRegistry implements
      */
     private void setupAssetTriggers() {
         subscriberPort.subscribe("FulfillmentCompleted", rawEvent -> IO.delay(() -> {
-            if (rawEvent instanceof io.effects.recipes.fulfillable.FulfillmentCompleted<?, ?> event) {
+            if (rawEvent instanceof io.effects.recipes.fulfillable.models.FulfillmentCompleted<?, ?> event) {
                 String orderId = event.fulfillmentId().toString();
                 Instant now = event.occurredAt();
                 

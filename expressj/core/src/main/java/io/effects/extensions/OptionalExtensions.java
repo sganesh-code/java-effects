@@ -1,7 +1,7 @@
 package io.effects.extensions;
 
-import io.effects.Either;
-import io.effects.IO;
+import io.effects.core.Either;
+import io.effects.core.IO;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Function;

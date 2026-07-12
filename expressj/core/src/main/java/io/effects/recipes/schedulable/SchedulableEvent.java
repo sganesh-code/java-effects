@@ -1,5 +1,7 @@
 package io.effects.recipes.schedulable;
 
+import io.effects.recipes.schedulable.models.*;
+
 import java.time.Instant;
 
 /**

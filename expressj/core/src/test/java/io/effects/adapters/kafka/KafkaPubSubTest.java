@@ -1,7 +1,7 @@
 package io.effects.adapters.kafka;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.effects.IO;
+import io.effects.core.IO;
 import io.effects.ports.Subscription;
 import org.apache.kafka.clients.consumer.*;
 import org.apache.kafka.clients.producer.Callback;

@@ -1,5 +1,7 @@
 package io.effects.recipes.meterable;
 
+import io.effects.recipes.meterable.models.*;
+
 import java.time.Instant;
 
 /**

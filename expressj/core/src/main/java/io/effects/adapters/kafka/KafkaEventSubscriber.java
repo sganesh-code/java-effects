@@ -1,8 +1,8 @@
 package io.effects.adapters.kafka;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.effects.IO;
-import io.effects.IORuntime;
+import io.effects.core.IO;
+import io.effects.core.IORuntime;
 import io.effects.ports.EventSubscriber;
 import io.effects.ports.Subscription;
 import org.apache.kafka.clients.consumer.Consumer;

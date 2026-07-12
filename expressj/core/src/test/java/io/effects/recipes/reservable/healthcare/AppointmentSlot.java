@@ -1,8 +1,10 @@
 package io.effects.recipes.reservable.healthcare;
 
-import io.effects.Either;
-import io.effects.recipes.reservable.Hold;
-import io.effects.recipes.reservable.Reservation;
+import io.effects.recipes.reservable.models.*;
+
+import io.effects.core.Either;
+import io.effects.recipes.reservable.models.Hold;
+import io.effects.recipes.reservable.models.Reservation;
 import io.effects.recipes.reservable.ReservableResource;
 import io.effects.recipes.reservable.ResourceLedger;
 import java.time.Instant;

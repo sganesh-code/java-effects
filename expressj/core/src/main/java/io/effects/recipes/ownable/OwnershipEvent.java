@@ -1,5 +1,7 @@
 package io.effects.recipes.ownable;
 
+import io.effects.recipes.ownable.models.*;
+
 import java.time.Instant;
 
 /**

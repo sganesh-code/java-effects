@@ -1,6 +1,8 @@
 package io.effects.recipes.negotiable;
 
-import io.effects.Either;
+import io.effects.recipes.negotiable.models.*;
+
+import io.effects.core.Either;
 import java.time.Instant;
 
 /**

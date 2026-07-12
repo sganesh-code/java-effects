@@ -1,12 +1,13 @@
 package io.effects.samples.ecommerce.domain;
 
-import io.effects.Either;
-import io.effects.IO;
+import io.effects.core.Either;
+import io.effects.core.IO;
 import io.effects.ports.EventPublisher;
 import io.effects.ports.EventSubscriber;
 import io.effects.adapters.InMemoryStateRepository;
 import io.effects.adapters.NoOpTelemetryPort;
 import io.effects.recipes.fulfillable.*;
+import io.effects.recipes.fulfillable.models.*;
 import java.time.Instant;
 
 /**
@@ -38,7 +39,7 @@ public class Logistics implements FulfillableRequest<String, Integer> {
     private void subscribeToEvents() {
         // 1. Stock hold confirmed -> automatically initiate tracking and allocate stock
         subscriberPort.subscribe("HoldConfirmed", rawEvent -> IO.delay(() -> {
-            if (rawEvent instanceof io.effects.recipes.reservable.HoldConfirmed<?, ?> event) {
+            if (rawEvent instanceof io.effects.recipes.reservable.models.HoldConfirmed<?, ?> event) {
                 String orderId = event.actorId();
                 String actorId = "buyer-admin";
                 int qty = ((Number) event.quantity()).intValue();
@@ -54,7 +55,7 @@ public class Logistics implements FulfillableRequest<String, Integer> {
 
         // 2. Items allocated -> automatically box items and hand over to dispatch carrier
         subscriberPort.subscribe("FulfillmentAllocated", rawEvent -> IO.delay(() -> {
-            if (rawEvent instanceof io.effects.recipes.fulfillable.FulfillmentAllocated<?, ?> event) {
+            if (rawEvent instanceof io.effects.recipes.fulfillable.models.FulfillmentAllocated<?, ?> event) {
                 String orderId = event.fulfillmentId().toString();
                 Instant now = event.occurredAt();
                 
@@ -68,7 +69,7 @@ public class Logistics implements FulfillableRequest<String, Integer> {
 
         // 3. Carrier dispatch completed -> automatically track transit and complete delivery
         subscriberPort.subscribe("FulfillmentDispatched", rawEvent -> IO.delay(() -> {
-            if (rawEvent instanceof io.effects.recipes.fulfillable.FulfillmentDispatched<?, ?> event) {
+            if (rawEvent instanceof io.effects.recipes.fulfillable.models.FulfillmentDispatched<?, ?> event) {
                 String orderId = event.fulfillmentId().toString();
                 Instant now = event.occurredAt();
                 

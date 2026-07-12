@@ -1,11 +1,12 @@
 package io.effects.samples.ecommerce.domain;
 
-import io.effects.Either;
+import io.effects.core.Either;
 import io.effects.ports.EventPublisher;
 import io.effects.adapters.InMemoryEventPublisher;
 import io.effects.adapters.InMemoryStateRepository;
 import io.effects.adapters.NoOpTelemetryPort;
 import io.effects.recipes.reservable.*;
+import io.effects.recipes.reservable.models.*;
 import java.time.Instant;
 
 /**

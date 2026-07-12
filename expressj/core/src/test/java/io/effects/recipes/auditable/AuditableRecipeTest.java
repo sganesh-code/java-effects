@@ -1,6 +1,8 @@
 package io.effects.recipes.auditable;
 
-import io.effects.Either;
+import io.effects.recipes.auditable.models.*;
+
+import io.effects.core.Either;
 import io.effects.adapters.InMemoryEventPublisher;
 import io.effects.adapters.InMemoryStateRepository;
 import io.effects.adapters.NoOpTelemetryPort;

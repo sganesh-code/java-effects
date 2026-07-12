@@ -1,5 +1,7 @@
 package io.effects.recipes.negotiable;
 
+import io.effects.recipes.negotiable.models.*;
+
 import java.time.Instant;
 
 /**

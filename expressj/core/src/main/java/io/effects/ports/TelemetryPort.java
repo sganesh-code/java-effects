@@ -1,6 +1,6 @@
 package io.effects.ports;
 
-import io.effects.IO;
+import io.effects.core.IO;
 
 /**
  * A generalized, type-safe telemetry port for recording operational success, failures, and execution latencies.

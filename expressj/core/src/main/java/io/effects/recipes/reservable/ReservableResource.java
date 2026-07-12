@@ -1,6 +1,8 @@
 package io.effects.recipes.reservable;
 
-import io.effects.Either;
+import io.effects.recipes.reservable.models.*;
+
+import io.effects.core.Either;
 import java.time.Instant;
 
 /**

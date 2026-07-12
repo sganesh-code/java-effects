@@ -1,8 +1,8 @@
 package io.effects.recipes;
 
-import io.effects.Either;
-import io.effects.ForIO;
-import io.effects.IO;
+import io.effects.core.Either;
+import io.effects.core.ForIO;
+import io.effects.core.IO;
 import io.effects.ports.EventPublisher;
 import io.effects.ports.StateRepository;
 import io.effects.ports.TelemetryPort;

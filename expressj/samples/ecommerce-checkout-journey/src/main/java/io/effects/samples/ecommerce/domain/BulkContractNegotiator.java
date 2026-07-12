@@ -1,10 +1,11 @@
 package io.effects.samples.ecommerce.domain;
 
-import io.effects.Either;
+import io.effects.core.Either;
 import io.effects.ports.EventPublisher;
 import io.effects.adapters.InMemoryStateRepository;
 import io.effects.adapters.NoOpTelemetryPort;
 import io.effects.recipes.negotiable.*;
+import io.effects.recipes.negotiable.models.*;
 import io.effects.samples.ecommerce.domain.models.BulkOrderTerms;
 import java.time.Instant;
 

@@ -1,5 +1,7 @@
 package io.effects.recipes.entitleable;
 
+import io.effects.recipes.entitleable.models.*;
+
 import java.time.Instant;
 
 /**

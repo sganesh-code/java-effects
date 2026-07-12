@@ -1,7 +1,8 @@
 package io.effects.samples.ecommerce.domain;
 
-import io.effects.Either;
+import io.effects.core.Either;
 import io.effects.recipes.schedulable.*;
+import io.effects.recipes.schedulable.models.*;
 import java.time.Instant;
 
 public class BillingScheduler implements SchedulableRequest<String, Instant> {

@@ -1,7 +1,7 @@
 package io.effects.extensions;
 
-import io.effects.Either;
-import io.effects.IO;
+import io.effects.core.Either;
+import io.effects.core.IO;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;

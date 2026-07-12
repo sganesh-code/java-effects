@@ -1,6 +1,6 @@
 package io.effects.adapters;
 
-import io.effects.IO;
+import io.effects.core.IO;
 import io.effects.ports.EventSubscriber;
 import io.effects.ports.Subscription;
 import java.util.List;

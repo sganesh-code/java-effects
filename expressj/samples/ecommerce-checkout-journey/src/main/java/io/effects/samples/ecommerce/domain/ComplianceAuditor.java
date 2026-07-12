@@ -1,7 +1,8 @@
 package io.effects.samples.ecommerce.domain;
 
-import io.effects.Either;
+import io.effects.core.Either;
 import io.effects.recipes.auditable.*;
+import io.effects.recipes.auditable.models.*;
 import io.effects.samples.ecommerce.domain.models.AuditCumulativeState;
 import io.effects.samples.ecommerce.domain.models.AuditEntry;
 import java.time.Instant;

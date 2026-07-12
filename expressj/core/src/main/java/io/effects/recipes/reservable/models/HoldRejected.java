@@ -1,0 +1,17 @@
+package io.effects.recipes.reservable.models;
+
+import io.effects.recipes.reservable.*;
+import io.effects.recipes.reservable.models.*;
+
+import java.time.Instant;
+
+/**
+ * Event published when a resource hold request is rejected.
+ */
+public record HoldRejected<ID, Q>(
+    ID resourceId,
+    String actorId,
+    Q quantity,
+    String reason,
+    Instant occurredAt
+) implements ReservationEvent<ID, Q> {}

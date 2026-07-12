@@ -1,6 +1,6 @@
 package io.effects.recipes;
 
-import io.effects.IO;
+import io.effects.core.IO;
 
 /**
  * A unified contract representing a business-facing Recipe (Process Manager) 

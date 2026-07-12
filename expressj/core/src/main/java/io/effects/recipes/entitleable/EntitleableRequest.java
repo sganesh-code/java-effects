@@ -1,6 +1,8 @@
 package io.effects.recipes.entitleable;
 
-import io.effects.Either;
+import io.effects.recipes.entitleable.models.*;
+
+import io.effects.core.Either;
 import java.time.Instant;
 
 /**

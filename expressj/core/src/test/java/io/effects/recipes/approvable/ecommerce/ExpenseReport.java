@@ -1,7 +1,10 @@
 package io.effects.recipes.approvable.ecommerce;
 
-import io.effects.Either;
+import io.effects.recipes.approvable.models.*;
+
+import io.effects.core.Either;
 import io.effects.recipes.approvable.*;
+import io.effects.recipes.approvable.models.*;
 import java.time.Instant;
 import java.util.Objects;
 

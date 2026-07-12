@@ -1,6 +1,6 @@
 package io.effects.extensions;
 
-import io.effects.IO;
+import io.effects.core.IO;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;

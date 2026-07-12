@@ -1,6 +1,8 @@
 package io.effects.recipes.ownable;
 
-import io.effects.Either;
+import io.effects.recipes.ownable.models.*;
+
+import io.effects.core.Either;
 import io.effects.recipes.TransitionResult;
 import java.time.Instant;
 import java.util.ArrayList;

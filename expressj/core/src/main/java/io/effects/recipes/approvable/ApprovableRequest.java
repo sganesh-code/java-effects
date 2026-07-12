@@ -1,6 +1,8 @@
 package io.effects.recipes.approvable;
 
-import io.effects.Either;
+import io.effects.recipes.approvable.models.*;
+
+import io.effects.core.Either;
 import java.time.Instant;
 
 /**

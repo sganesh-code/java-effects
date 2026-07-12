@@ -1,6 +1,6 @@
 package io.effects.ports;
 
-import io.effects.IO;
+import io.effects.core.IO;
 
 /**
  * Represents an active subscription or message listener registration.

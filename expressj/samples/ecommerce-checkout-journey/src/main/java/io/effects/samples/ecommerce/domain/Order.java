@@ -1,8 +1,8 @@
 package io.effects.samples.ecommerce.domain;
 
-import io.effects.IO;
+import io.effects.core.IO;
 import io.effects.ports.EventSubscriber;
-import io.effects.recipes.reservable.Hold;
+import io.effects.recipes.reservable.models.Hold;
 import io.effects.samples.ecommerce.domain.models.SLAContext;
 import io.effects.samples.ecommerce.domain.models.WarrantyGrant;
 import java.time.Instant;
@@ -44,7 +44,7 @@ public class Order {
     private void setupOrderTriggers() {
         // Automatically reserve and confirm stock once payment credit has been successfully authorized
         subscriberPort.subscribe("PaymentAuthorized", rawEvent -> IO.delay(() -> {
-            if (rawEvent instanceof io.effects.recipes.payable.PaymentAuthorized<?, ?> event) {
+            if (rawEvent instanceof io.effects.recipes.payable.models.PaymentAuthorized<?, ?> event) {
                 String ordId = event.paymentId().toString();
                 Instant now = event.occurredAt();
                 

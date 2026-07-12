@@ -1,6 +1,8 @@
 package io.effects.recipes.schedulable;
 
-import io.effects.Either;
+import io.effects.recipes.schedulable.models.*;
+
+import io.effects.core.Either;
 import java.time.Instant;
 
 /**

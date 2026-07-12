@@ -1,5 +1,7 @@
 package io.effects.recipes.fulfillable;
 
+import io.effects.recipes.fulfillable.models.*;
+
 import java.time.Instant;
 
 /**

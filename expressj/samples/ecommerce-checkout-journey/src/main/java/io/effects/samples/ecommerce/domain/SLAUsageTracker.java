@@ -1,7 +1,8 @@
 package io.effects.samples.ecommerce.domain;
 
-import io.effects.Either;
+import io.effects.core.Either;
 import io.effects.recipes.meterable.*;
+import io.effects.recipes.meterable.models.*;
 import io.effects.samples.ecommerce.domain.models.DiagnosticMetric;
 import io.effects.samples.ecommerce.domain.models.SLAInvoice;
 import java.time.Instant;

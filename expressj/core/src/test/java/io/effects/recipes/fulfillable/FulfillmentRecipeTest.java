@@ -1,6 +1,8 @@
 package io.effects.recipes.fulfillable;
 
-import io.effects.Either;
+import io.effects.recipes.fulfillable.models.*;
+
+import io.effects.core.Either;
 import io.effects.ports.EventPublisher;
 import io.effects.ports.StateRepository;
 import io.effects.ports.TelemetryPort;

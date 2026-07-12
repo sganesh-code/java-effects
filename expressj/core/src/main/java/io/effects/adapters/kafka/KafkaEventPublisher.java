@@ -1,8 +1,8 @@
 package io.effects.adapters.kafka;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.effects.Either;
-import io.effects.IO;
+import io.effects.core.Either;
+import io.effects.core.IO;
 import io.effects.ports.EventPublisher;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;

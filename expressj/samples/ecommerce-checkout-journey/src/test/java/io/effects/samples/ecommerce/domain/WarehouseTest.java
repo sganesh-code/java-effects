@@ -1,7 +1,7 @@
 package io.effects.samples.ecommerce.domain;
 
-import io.effects.recipes.reservable.Hold;
-import io.effects.recipes.reservable.Reservation;
+import io.effects.recipes.reservable.models.Hold;
+import io.effects.recipes.reservable.models.Reservation;
 import org.junit.jupiter.api.Test;
 import java.time.Instant;
 import static org.junit.jupiter.api.Assertions.*;

@@ -1,5 +1,7 @@
 package io.effects.recipes.reservable;
 
+import io.effects.recipes.reservable.models.*;
+
 import java.time.Instant;
 
 /**

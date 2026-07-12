@@ -1,6 +1,8 @@
 package io.effects.recipes.reservable;
 
-import io.effects.Either;
+import io.effects.recipes.reservable.models.*;
+
+import io.effects.core.Either;
 import io.effects.ports.TelemetryPort;
 import io.effects.adapters.InMemoryEventPublisher;
 import io.effects.adapters.InMemoryStateRepository;
@@ -110,24 +112,24 @@ class ReservationRecipeTest {
             int durationCalls = 0;
 
             @Override
-            public io.effects.IO<Void> recordSuccess(String context, String operationId) {
-                return io.effects.IO.delay(() -> {
+            public io.effects.core.IO<Void> recordSuccess(String context, String operationId) {
+                return io.effects.core.IO.delay(() -> {
                     successCalls++;
                     return null;
                 });
             }
 
             @Override
-            public io.effects.IO<Void> recordFailure(String context, String operationId, String reason) {
-                return io.effects.IO.delay(() -> {
+            public io.effects.core.IO<Void> recordFailure(String context, String operationId, String reason) {
+                return io.effects.core.IO.delay(() -> {
                     failureCalls++;
                     return null;
                 });
             }
 
             @Override
-            public io.effects.IO<Void> recordDuration(String context, String operationId, long durationMs) {
-                return io.effects.IO.delay(() -> {
+            public io.effects.core.IO<Void> recordDuration(String context, String operationId, long durationMs) {
+                return io.effects.core.IO.delay(() -> {
                     durationCalls++;
                     return null;
                 });

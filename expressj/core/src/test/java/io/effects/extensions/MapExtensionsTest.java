@@ -1,6 +1,6 @@
 package io.effects.extensions;
 
-import io.effects.IO;
+import io.effects.core.IO;
 import lombok.experimental.ExtensionMethod;
 import org.junit.jupiter.api.Test;
 import java.util.HashMap;
