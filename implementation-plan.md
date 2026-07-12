@@ -72,7 +72,7 @@ The following tickets break down the implementation of the next set of advanced 
 
 ---
 
-- [ ] **🎟️ [TICKET-003]: Implement Escalatable Collaboration Recipe**
+- [x] **🎟️ [TICKET-003]: Implement Escalatable Collaboration Recipe**
   - **Description:** Implement a generic `Escalatable` collaboration recipe to handle time-sensitive re-assignments, SLA breaches, and authority promotion for cases or transactions.
   - **Scope:**
     - **In scope:**
@@ -83,12 +83,18 @@ The following tickets break down the implementation of the next set of advanced 
     - **Out of scope:**
       - Direct email notifications or SMS dispatch integrations.
   - **Implementation Tasks:**
-    - [ ] Create package `io.effects.recipes.escalatable` and sub-package `models`.
-    - [ ] Define escalation event types and step records.
-    - [ ] Define behavioral request interface `EscalatableRequest<ID, T, C>`.
-    - [ ] Build rich aggregate root `EscalationLedger<ID, T, C>` with visitor state projection.
-    - [ ] Create `EscalatableProcess<ID, T, C>` extending `Recipe` using `ProcessCoordinator`.
-    - [ ] Add unit tests verifying SLA breaches, authority escalation, re-assignment, and de-escalation lifecycles.
+    - [x] Create package `io.effects.recipes.escalatable` and sub-package `models`.
+      - *Created package directories and files under `io.effects.recipes.escalatable` and `models`.*
+    - [x] Define escalation event types and step records.
+      - *Implemented the generic `EscalatableEvent` contract, `EscalationStep` record, and concrete event types `SLAWarningTriggered`, `CaseEscalated`, `CaseDeescalated`, and `CaseReassigned`.*
+    - [x] Define behavioral request interface `EscalatableRequest<ID, T, C>`.
+      - *Created the getter-free behavioral interface to evaluate filing, warnings, escalations, de-escalations, and reassignments.*
+    - [x] Build rich aggregate root `EscalationLedger<ID, T, C>` with visitor state projection.
+      - *Implemented the completely getter-free thread-safe `EscalationLedger` aggregate root utilizing `EscalationProjector` visitor projection.*
+    - [x] Create `EscalatableProcess<ID, T, C>` extending `Recipe` using `ProcessCoordinator`.
+      - *Created the monadic `EscalatableProcess` coordinator implementing `Recipe` and leveraging `ProcessCoordinator` inside standard functional `IO` shell.*
+    - [x] Add unit tests verifying SLA breaches, authority escalation, re-assignment, and de-escalation lifecycles.
+      - *Created exhaustive test suite in `EscalatableRecipeTest` covering filing/escalations, SLA warning thresholds with late validations, reassignments, and de-escalation controls.*
 
 ---
 
