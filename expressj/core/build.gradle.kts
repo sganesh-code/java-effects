@@ -101,6 +101,7 @@ publishing {
     publications {
         create<MavenPublication>("mavenJava") {
             from(components["java"])
+            artifactId = "expressj-core"
             
             pom {
                 name.set("ExpressJ Core")

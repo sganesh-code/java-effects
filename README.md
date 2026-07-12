@@ -107,7 +107,7 @@ repositories {
 }
 
 dependencies {
-    implementation("io.github.sganesh-code:core:0.1.0")
+    implementation("io.github.sganesh-code:expressj-core:0.1.0")
 }
 ```
 
@@ -115,7 +115,7 @@ dependencies {
 ```xml
 <dependency>
     <groupId>io.github.sganesh-code</groupId>
-    <artifactId>core</artifactId>
+    <artifactId>expressj-core</artifactId>
     <version>0.1.0</version>
 </dependency>
 ```
