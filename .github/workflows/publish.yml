@@ -22,6 +22,10 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
 
+      - name: Decode GPG Keyring
+        run: echo "${{ secrets.GPG_PRIVATE_KEY }}" | base64 --decode > secring.gpg
+        working-directory: expressj
+
       - name: Publish to Sonatype OSSRH / Maven Central
         run: |
           TAG_VERSION="${GITHUB_REF#refs/tags/v}"
@@ -30,6 +34,6 @@ jobs:
         env:
           ORG_GRADLE_PROJECT_mavenUsername: ${{ secrets.MAVEN_USERNAME }}
           ORG_GRADLE_PROJECT_mavenPassword: ${{ secrets.MAVEN_PASSWORD }}
-          ORG_GRADLE_PROJECT_signingKeyId: ${{ secrets.GPG_KEY_ID }}
-          ORG_GRADLE_PROJECT_signingKey: ${{ secrets.GPG_PRIVATE_KEY }}
-          ORG_GRADLE_PROJECT_signingPassword: ${{ secrets.GPG_PASSPHRASE }}
+          ORG_GRADLE_PROJECT_signing.keyId: ${{ secrets.GPG_KEY_ID }}
+          ORG_GRADLE_PROJECT_signing.password: ${{ secrets.GPG_PASSPHRASE }}
+          ORG_GRADLE_PROJECT_signing.secretKeyRingFile: secring.gpg
