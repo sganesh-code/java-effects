@@ -131,19 +131,26 @@ publishing {
     
     repositories {
         maven {
-            name = "OSSRH"
-            val releasesRepoUrl = "https://ossrh-staging-api.central.sonatype.com/service/local/staging/deploy/maven2/"
-            val snapshotsRepoUrl = "https://central.sonatype.com/repository/maven-snapshots/"
-            url = uri(if (version.toString().endsWith("SNAPSHOT")) snapshotsRepoUrl else releasesRepoUrl)
-            
-            credentials {
-                username = findProperty("mavenUsername") as String? ?: ""
-                password = findProperty("mavenPassword") as String? ?: ""
-            }
+            url = uri(layout.buildDirectory.dir("repos"))
         }
     }
 }
 
+tasks.register<Zip>("zipBundle") {
+    dependsOn("publish")
+    from(layout.buildDirectory.dir("repos"))
+    archiveFileName.set("bundle.zip")
+    destinationDirectory.set(layout.buildDirectory)
+}
+
 signing {
-    sign(publishing.publications)
+    isRequired = System.getenv("CI") == "true"
+    if (System.getenv("CI") == "true") {
+        useInMemoryPgpKeys(
+            System.getenv("GPG_KEY_ID"),
+            System.getenv("GPG_PRIVATE_KEY"),
+            System.getenv("GPG_PASSPHRASE")
+        )
+    }
+    sign(publishing.publications["mavenJava"])
 }
