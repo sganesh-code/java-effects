@@ -9,6 +9,7 @@ import io.effects.adapters.InMemoryEventPublisher;
 import io.effects.adapters.InMemoryStateRepository;
 import io.effects.adapters.NoOpTelemetryPort;
 import io.effects.recipes.ProcessCoordinator;
+import io.effects.recipes.ProcessRegistry;
 import io.effects.recipes.TransitionResult;
 import java.time.Instant;
 import java.util.Objects;
@@ -21,7 +22,7 @@ import java.util.function.Function;
  * It coordinates monadic persistence lookup, domain aggregation, and event publishing,
  * completely decoupled from business logic invariants (which reside inside FulfillmentLedger).
  */
-public final class FulfillmentProcess<ID, Q> {
+public final class FulfillmentProcess<ID, Q> implements ProcessRegistry<ID, FulfillableRequest<ID, Q>> {
     private final StateRepository<ID, FulfillmentLedger<ID, Q>> repository;
     private final EventPublisher<FulfillmentEvent<ID, Q>> publisher;
     private final TelemetryPort telemetry;
@@ -52,6 +53,7 @@ public final class FulfillmentProcess<ID, Q> {
     /**
      * Registers a behavioral fulfillment request domain object.
      */
+    @Override
     public IO<Void> register(ID fulfillmentId, FulfillableRequest<ID, Q> request) {
         Objects.requireNonNull(fulfillmentId);
         Objects.requireNonNull(request);
@@ -59,6 +61,21 @@ public final class FulfillmentProcess<ID, Q> {
             fulfillments.put(fulfillmentId, request);
             return null;
         });
+    }
+
+    @Override
+    public IO<Void> unregister(ID fulfillmentId) {
+        Objects.requireNonNull(fulfillmentId);
+        return IO.delay(() -> {
+            fulfillments.remove(fulfillmentId);
+            return null;
+        });
+    }
+
+    @Override
+    public IO<Boolean> isRegistered(ID fulfillmentId) {
+        Objects.requireNonNull(fulfillmentId);
+        return IO.delay(() -> fulfillments.containsKey(fulfillmentId));
     }
 
     /**

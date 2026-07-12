@@ -9,6 +9,7 @@ import io.effects.adapters.InMemoryEventPublisher;
 import io.effects.adapters.InMemoryStateRepository;
 import io.effects.adapters.NoOpTelemetryPort;
 import io.effects.recipes.ProcessCoordinator;
+import io.effects.recipes.ProcessRegistry;
 import io.effects.recipes.TransitionResult;
 import java.time.Instant;
 import java.util.Objects;
@@ -22,7 +23,7 @@ import java.util.function.Function;
  * It coordinates monadic persistence lookup, domain aggregation, and event publishing,
  * completely decoupled from business logic invariants (which reside inside PaymentLedger).
  */
-public final class PayableProcess<ID, M> {
+public final class PayableProcess<ID, M> implements ProcessRegistry<ID, PayableRequest<ID, M>> {
     private final StateRepository<ID, PaymentLedger<ID, M>> repository;
     private final EventPublisher<PaymentEvent<ID, M>> publisher;
     private final TelemetryPort telemetry;
@@ -53,6 +54,7 @@ public final class PayableProcess<ID, M> {
     /**
      * Registers a behavioral payment request domain object.
      */
+    @Override
     public IO<Void> register(ID paymentId, PayableRequest<ID, M> payment) {
         Objects.requireNonNull(paymentId);
         Objects.requireNonNull(payment);
@@ -60,6 +62,21 @@ public final class PayableProcess<ID, M> {
             payments.put(paymentId, payment);
             return null;
         });
+    }
+
+    @Override
+    public IO<Void> unregister(ID paymentId) {
+        Objects.requireNonNull(paymentId);
+        return IO.delay(() -> {
+            payments.remove(paymentId);
+            return null;
+        });
+    }
+
+    @Override
+    public IO<Boolean> isRegistered(ID paymentId) {
+        Objects.requireNonNull(paymentId);
+        return IO.delay(() -> payments.containsKey(paymentId));
     }
 
     /**

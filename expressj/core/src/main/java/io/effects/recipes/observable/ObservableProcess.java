@@ -9,6 +9,7 @@ import io.effects.ports.TelemetryPort;
 import io.effects.adapters.InMemoryEventPublisher;
 import io.effects.adapters.InMemoryStateRepository;
 import io.effects.adapters.NoOpTelemetryPort;
+import io.effects.recipes.ProcessRegistry;
 import io.effects.recipes.TransitionResult;
 import java.time.Instant;
 import java.util.Objects;
@@ -18,7 +19,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * An Object-Oriented "Recipe" representing an Observable Process Manager.
  * Coordinates declarative subscriptions, filtering policies, and event routing.
  */
-public final class ObservableProcess<ID, S, E> {
+public final class ObservableProcess<ID, S, E> implements ProcessRegistry<S, ObservableRequest<ID, E>> {
     private final StateRepository<ID, ObservableLedger<ID, S>> repository;
     private final EventPublisher<ObservableEvent<ID, S>> publisher;
     private final EventSubscriber<E> subscriberPort;
@@ -50,6 +51,7 @@ public final class ObservableProcess<ID, S, E> {
     /**
      * Registers a behavioral subscriber domain object.
      */
+    @Override
     public IO<Void> register(S subscriberId, ObservableRequest<ID, E> subscriber) {
         Objects.requireNonNull(subscriberId);
         Objects.requireNonNull(subscriber);
@@ -57,6 +59,21 @@ public final class ObservableProcess<ID, S, E> {
             subscribers.put(subscriberId, subscriber);
             return null;
         });
+    }
+
+    @Override
+    public IO<Void> unregister(S subscriberId) {
+        Objects.requireNonNull(subscriberId);
+        return IO.delay(() -> {
+            subscribers.remove(subscriberId);
+            return null;
+        });
+    }
+
+    @Override
+    public IO<Boolean> isRegistered(S subscriberId) {
+        Objects.requireNonNull(subscriberId);
+        return IO.delay(() -> subscribers.containsKey(subscriberId));
     }
 
     /**

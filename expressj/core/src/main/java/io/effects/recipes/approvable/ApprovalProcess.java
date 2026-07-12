@@ -9,6 +9,7 @@ import io.effects.adapters.InMemoryEventPublisher;
 import io.effects.adapters.InMemoryStateRepository;
 import io.effects.adapters.NoOpTelemetryPort;
 import io.effects.recipes.ProcessCoordinator;
+import io.effects.recipes.ProcessRegistry;
 import io.effects.recipes.TransitionResult;
 import java.time.Instant;
 import java.util.Objects;
@@ -22,7 +23,7 @@ import java.util.function.Function;
  * It coordinates monadic persistence lookup, domain aggregation, and event publishing,
  * completely decoupled from business logic invariants (which reside inside ApprovalRecord).
  */
-public final class ApprovalProcess<ID, A, C> {
+public final class ApprovalProcess<ID, A, C> implements ProcessRegistry<ID, ApprovableRequest<ID, A, C>> {
     private final StateRepository<ID, ApprovalRecord<ID, A, C>> repository;
     private final EventPublisher<ApprovalEvent<ID, A>> publisher;
     private final TelemetryPort telemetry;
@@ -53,6 +54,7 @@ public final class ApprovalProcess<ID, A, C> {
     /**
      * Registers a behavioral ownable request domain object.
      */
+    @Override
     public IO<Void> register(ID requestId, ApprovableRequest<ID, A, C> request) {
         Objects.requireNonNull(requestId);
         Objects.requireNonNull(request);
@@ -60,6 +62,21 @@ public final class ApprovalProcess<ID, A, C> {
             requests.put(requestId, request);
             return null;
         });
+    }
+
+    @Override
+    public IO<Void> unregister(ID requestId) {
+        Objects.requireNonNull(requestId);
+        return IO.delay(() -> {
+            requests.remove(requestId);
+            return null;
+        });
+    }
+
+    @Override
+    public IO<Boolean> isRegistered(ID requestId) {
+        Objects.requireNonNull(requestId);
+        return IO.delay(() -> requests.containsKey(requestId));
     }
 
     /**
@@ -109,7 +126,7 @@ public final class ApprovalProcess<ID, A, C> {
             "approve",
             optRecord -> {
                 if (optRecord.isEmpty()) {
-                    return Either.left("Request record not found: " + requestId);
+                    return Either.left("Request register not found: " + requestId);
                 }
                 ApprovalRecord<ID, A, C> record = optRecord.get();
                 Either<String, ApprovalEvent<ID, A>> eitherEvent = record.approve(approverId, approverRole, detail, request, now);
@@ -139,7 +156,7 @@ public final class ApprovalProcess<ID, A, C> {
             "reject",
             optRecord -> {
                 if (optRecord.isEmpty()) {
-                    return Either.left("Request record not found: " + requestId);
+                    return Either.left("Request register not found: " + requestId);
                 }
                 ApprovalRecord<ID, A, C> record = optRecord.get();
                 Either<String, ApprovalEvent<ID, A>> eitherEvent = record.reject(approverId, approverRole, reason, request, now);
@@ -170,7 +187,7 @@ public final class ApprovalProcess<ID, A, C> {
             "escalate",
             optRecord -> {
                 if (optRecord.isEmpty()) {
-                    return Either.left("Request record not found: " + requestId);
+                    return Either.left("Request register not found: " + requestId);
                 }
                 ApprovalRecord<ID, A, C> record = optRecord.get();
                 Either<String, ApprovalEvent<ID, A>> eitherEvent = record.escalate(approverId, approverRole, targetAuthority, reason, request, now);

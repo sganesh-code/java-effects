@@ -9,6 +9,7 @@ import io.effects.ports.TelemetryPort;
 import io.effects.adapters.InMemoryEventPublisher;
 import io.effects.adapters.InMemoryStateRepository;
 import io.effects.adapters.NoOpTelemetryPort;
+import io.effects.recipes.ProcessRegistry;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
@@ -23,7 +24,7 @@ import java.util.concurrent.ConcurrentMap;
  * engine, and thus exposes purely monadic APIs (returning IO) to allow lazy, virtual-thread execution,
  * cancellation, and pipeline composition.
  */
-public final class ReservationProcess<ID, Q> {
+public final class ReservationProcess<ID, Q> implements ProcessRegistry<ID, ReservableResource<ID, Q>> {
     private final StateRepository<ID, ResourceLedger<ID, Q>> ledgerRepository;
     private final StateRepository<String, Hold<ID, Q>> holdRepository;
     private final EventPublisher<ReservationEvent<ID, Q>> eventPublisher;
@@ -55,6 +56,7 @@ public final class ReservationProcess<ID, Q> {
     /**
      * Registers a behavioral resource domain object.
      */
+    @Override
     public IO<Void> register(ID resourceId, ReservableResource<ID, Q> resource) {
         Objects.requireNonNull(resourceId);
         Objects.requireNonNull(resource);
@@ -62,6 +64,21 @@ public final class ReservationProcess<ID, Q> {
             resources.put(resourceId, resource);
             return null;
         }).flatMap(v -> ledgerRepository.save(resourceId, new ResourceLedger<>()));
+    }
+
+    @Override
+    public IO<Void> unregister(ID resourceId) {
+        Objects.requireNonNull(resourceId);
+        return IO.delay(() -> {
+            resources.remove(resourceId);
+            return null;
+        });
+    }
+
+    @Override
+    public IO<Boolean> isRegistered(ID resourceId) {
+        Objects.requireNonNull(resourceId);
+        return IO.delay(() -> resources.containsKey(resourceId));
     }
 
     /**

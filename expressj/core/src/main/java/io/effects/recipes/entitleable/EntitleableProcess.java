@@ -10,6 +10,7 @@ import io.effects.adapters.InMemoryEventPublisher;
 import io.effects.adapters.InMemoryStateRepository;
 import io.effects.adapters.NoOpTelemetryPort;
 import io.effects.recipes.ProcessCoordinator;
+import io.effects.recipes.ProcessRegistry;
 import io.effects.recipes.TransitionResult;
 import java.time.Instant;
 import java.util.Objects;
@@ -23,7 +24,7 @@ import java.util.function.Function;
  * It coordinates monadic persistence lookup, domain aggregation, and event publishing,
  * completely decoupled from business logic invariants (which reside inside EntitlementLedger).
  */
-public final class EntitleableProcess<ID, G, C> {
+public final class EntitleableProcess<ID, G, C> implements ProcessRegistry<ID, EntitleableRequest<ID, G, C>> {
     private final StateRepository<ID, EntitlementLedger<ID, G>> repository;
     private final EventPublisher<EntitlementEvent<ID>> publisher;
     private final TelemetryPort telemetry;
@@ -54,6 +55,7 @@ public final class EntitleableProcess<ID, G, C> {
     /**
      * Registers a behavioral entitlement request domain object containing custom rules.
      */
+    @Override
     public IO<Void> register(ID actorId, EntitleableRequest<ID, G, C> rule) {
         Objects.requireNonNull(actorId);
         Objects.requireNonNull(rule);
@@ -61,6 +63,21 @@ public final class EntitleableProcess<ID, G, C> {
             rules.put(actorId, rule);
             return null;
         });
+    }
+
+    @Override
+    public IO<Void> unregister(ID actorId) {
+        Objects.requireNonNull(actorId);
+        return IO.delay(() -> {
+            rules.remove(actorId);
+            return null;
+        });
+    }
+
+    @Override
+    public IO<Boolean> isRegistered(ID actorId) {
+        Objects.requireNonNull(actorId);
+        return IO.delay(() -> rules.containsKey(actorId));
     }
 
     /**

@@ -9,6 +9,7 @@ import io.effects.adapters.InMemoryEventPublisher;
 import io.effects.adapters.InMemoryStateRepository;
 import io.effects.adapters.NoOpTelemetryPort;
 import io.effects.recipes.ProcessCoordinator;
+import io.effects.recipes.ProcessRegistry;
 import io.effects.recipes.TransitionResult;
 import java.time.Instant;
 import java.util.Objects;
@@ -22,7 +23,7 @@ import java.util.function.Function;
  * It coordinates monadic persistence lookup, domain aggregation, and event publishing,
  * completely decoupled from business logic invariants (which reside inside NegotiationLedger).
  */
-public final class NegotiableProcess<ID, P> {
+public final class NegotiableProcess<ID, P> implements ProcessRegistry<ID, NegotiableRequest<ID, P>> {
     private final StateRepository<ID, NegotiationLedger<ID, P>> repository;
     private final EventPublisher<NegotiationEvent<ID>> publisher;
     private final TelemetryPort telemetry;
@@ -53,6 +54,7 @@ public final class NegotiableProcess<ID, P> {
     /**
      * Registers a behavioral negotiable request domain object containing custom rules.
      */
+    @Override
     public IO<Void> register(ID sessionId, NegotiableRequest<ID, P> request) {
         Objects.requireNonNull(sessionId);
         Objects.requireNonNull(request);
@@ -60,6 +62,21 @@ public final class NegotiableProcess<ID, P> {
             sessions.put(sessionId, request);
             return null;
         });
+    }
+
+    @Override
+    public IO<Void> unregister(ID sessionId) {
+        Objects.requireNonNull(sessionId);
+        return IO.delay(() -> {
+            sessions.remove(sessionId);
+            return null;
+        });
+    }
+
+    @Override
+    public IO<Boolean> isRegistered(ID sessionId) {
+        Objects.requireNonNull(sessionId);
+        return IO.delay(() -> sessions.containsKey(sessionId));
     }
 
     /**

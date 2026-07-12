@@ -1,0 +1,38 @@
+package io.effects.recipes;
+
+import io.effects.IO;
+
+/**
+ * A unified contract representing a Process Manager that coordinates the active 
+ * registration, unregistration, and state verification of behavioral domain objects.
+ *
+ * @param <ID> the unique identifier type for the transaction or entity
+ * @param <R> the contract interface representing the participating behavioral domain object
+ */
+public interface ProcessRegistry<ID, R> {
+
+    /**
+     * Registers a behavioral business domain object to participate in this process manager's lifecycle.
+     *
+     * @param transactionId the unique identifier for the transaction
+     * @param behavioralObject the domain object containing custom business rules and callbacks
+     * @return an IO computation executing the registration
+     */
+    IO<Void> register(ID transactionId, R behavioralObject);
+
+    /**
+     * Unregisters/evicts a behavioral business domain object from active memory registration.
+     *
+     * @param transactionId the unique identifier for the transaction
+     * @return an IO computation executing the unregistration
+     */
+    IO<Void> unregister(ID transactionId);
+
+    /**
+     * Verifies if a behavioral business domain object is currently registered for the given identifier.
+     *
+     * @param transactionId the unique identifier for the transaction
+     * @return an IO computation returning true if registered, false otherwise
+     */
+    IO<Boolean> isRegistered(ID transactionId);
+}
