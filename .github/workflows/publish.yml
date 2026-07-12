@@ -25,5 +25,10 @@ jobs:
       - name: Publish to Sonatype OSSRH / Maven Central
         run: |
           TAG_VERSION="${GITHUB_REF#refs/tags/v}"
-          ./gradlew publish -Pversion="${TAG_VERSION}" -PmavenUsername="${{ secrets.MAVEN_USERNAME }}" -PmavenPassword="${{ secrets.MAVEN_PASSWORD }}" -PsigningKey="${{ secrets.GPG_PRIVATE_KEY }}" -PsigningPassword="${{ secrets.GPG_PASSPHRASE }}"
+          ./gradlew publish -Pversion="${TAG_VERSION}"
         working-directory: expressj
+        env:
+          ORG_GRADLE_PROJECT_mavenUsername: ${{ secrets.MAVEN_USERNAME }}
+          ORG_GRADLE_PROJECT_mavenPassword: ${{ secrets.MAVEN_PASSWORD }}
+          ORG_GRADLE_PROJECT_signingKey: ${{ secrets.GPG_PRIVATE_KEY }}
+          ORG_GRADLE_PROJECT_signingPassword: ${{ secrets.GPG_PASSPHRASE }}
