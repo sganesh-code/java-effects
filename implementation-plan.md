@@ -75,7 +75,7 @@ The following tickets break down the implementation of the next set of reusable 
 
 ---
 
-- [ ] **🎟️ [TICKET-003]: Implement Retryable Collaboration Recipe**
+- [x] **🎟️ [TICKET-003]: Implement Retryable Collaboration Recipe**
   - **Description:** Implement a generic `Retryable` collaboration recipe that manages the execution of transiently-failing actions, orchestrating attempts according to modular backoff policies, recording success/failure histories, and enforcing terminal abandonment/fallback when thresholds are exceeded.
   - **Scope:**
     - **In scope:**
@@ -86,16 +86,22 @@ The following tickets break down the implementation of the next set of reusable 
     - **Out of scope:**
       - Deep system-level `Thread.sleep()` threads or direct OS-level job schedulers. Delay execution must leverage monadic `IO.delay` or asynchronous task executors.
   - **Implementation Tasks:**
-    - [ ] Create package `io.effects.recipes.retryable` and sub-package `models`.
-    - [ ] Define retry event types: `RetryableEvent<ID>`, `ExecutionSucceeded<ID>`, `RetryScheduled<ID>`, `AttemptFailed<ID>`, `ExecutionAbandoned<ID>`.
-    - [ ] Define behavioral request interface `RetryableRequest<ID, C>` for assessing error categorization and defining backoff policy (e.g. constant, exponential with jitter).
-    - [ ] Build the non-anemic `RetryLedger<ID, C>` aggregate root to capture attempts count, error messages, and state progression.
-    - [ ] Implement `RetryableProcess<ID, C>` extending `Recipe` to execute the runnable operations, log telemetry, publish retry events, and manage scheduler delays.
-    - [ ] Add rigorous unit tests under `expressj/core/src/test/java/io/effects/recipes/retryable/` verifying:
+    - [x] Create package `io.effects.recipes.retryable` and sub-package `models`.
+      - *Created package directories and files under `io.effects.recipes.retryable` and `models`.*
+    - [x] Define retry event types: `RetryableEvent<ID>`, `ExecutionSucceeded<ID>`, `RetryScheduled<ID>`, `AttemptFailed<ID>`, `ExecutionAbandoned<ID>`.
+      - *Implemented the generic `RetryableEvent` contract, `RetryStep` record, and concrete event types `ExecutionSucceeded`, `RetryScheduled`, `AttemptFailed`, and `ExecutionAbandoned`.*
+    - [x] Define behavioral request interface `RetryableRequest<ID, C>` for assessing error categorization and defining backoff policy (e.g. constant, exponential with jitter).
+      - *Created the getter-free behavioral interface to evaluate failure transience, max attempts, and calculate backoff delay durations.*
+    - [x] Build the non-anemic `RetryLedger<ID, C>` aggregate root to capture attempts count, error messages, and state progression.
+      - *Implemented the non-anemic, thread-safe `RetryLedger` aggregate root owning lifecycle attempt states.*
+    - [x] Implement `RetryableProcess<ID, C>` extending `Recipe` to execute the runnable operations, log telemetry, publish retry events, and manage scheduler delays.
+      - *Created the monadic `RetryableProcess` that implements lazy execution wrapping, error inspection, recursive retry backoffs, and telemetry reporting.*
+    - [x] Add rigorous unit tests under `expressj/core/src/test/java/io/effects/recipes/retryable/` verifying:
       - Instant success path (no retries).
       - Brittle operation that fails once, retries with backoff delay, and then succeeds.
       - Permanent failure path that exceeds retry limits and transitions to terminal `FAILED` (emits `ExecutionAbandoned`).
       - Invariants validation (e.g. attempt counters, maximum retry limitations, thread-safety).
+      - *Created complete suite of tests in `RetryableRecipeTest` covering immediate success, brittle operations that retry and succeed, permanent failures exceeding limits, and immediate abandonment for fatal non-transient errors.*
 
 ---
 
