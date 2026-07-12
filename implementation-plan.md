@@ -98,7 +98,7 @@ The following tickets break down the implementation of the next set of advanced 
 
 ---
 
-- [ ] **🎟️ [TICKET-004]: Implement Throttlable Collaboration Recipe**
+- [x] **🎟️ [TICKET-004]: Implement Throttlable Collaboration Recipe**
   - **Description:** Implement a generic `Throttlable` collaboration recipe that manages rate-limiting, token consumption, sliding window histories, and backpressure enforcement.
   - **Scope:**
     - **In scope:**
@@ -109,9 +109,15 @@ The following tickets break down the implementation of the next set of advanced 
     - **Out of scope:**
       - Distributed Redis-backed rate limiters (only local-to-node thread-safe JVM memory limiters are managed).
   - **Implementation Tasks:**
-    - [ ] Create package `io.effects.recipes.throttlable` and sub-package `models`.
-    - [ ] Define throttlable event types and state buckets.
-    - [ ] Define behavioral request interface `ThrottlableRequest<ID, C>`.
-    - [ ] Build rich aggregate root `TokenBucketLedger<ID, C>` with visitor projection.
-    - [ ] Create `ThrottlableProcess<ID, C>` extending `Recipe`.
-    - [ ] Add unit tests verifying token consumption, sliding backpressure delays, automatic refills, and quota limits.
+    - [x] Create package `io.effects.recipes.throttlable` and sub-package `models`.
+      - *Created package directories and files under `io.effects.recipes.throttlable` and `models`.*
+    - [x] Define throttlable event types and state buckets.
+      - *Implemented the generic `ThrottlableEvent` contract, `ThrottleStep` record, and concrete event types `TokensConsumed`, `RateThrottled`, and `QuotaRefilled`.*
+    - [x] Define behavioral request interface `ThrottlableRequest<ID, C>`.
+      - *Created the getter-free behavioral interface specifying max capacity, refill rate, and double-dispatch token consumption/refill evaluation callbacks.*
+    - [x] Build rich aggregate root `TokenBucketLedger<ID, C>` with visitor projection.
+      - *Implemented the completely getter-free thread-safe `TokenBucketLedger` aggregate root with Token Bucket algorithm, refills, and `ThrottlableProjector` projection.*
+    - [x] Create `ThrottlableProcess<ID, C>` extending `Recipe`.
+      - *Created the monadic `ThrottlableProcess` implementing `Recipe` and leveraging `ProcessCoordinator` inside standard functional `IO` shell.*
+    - [x] Add unit tests verifying token consumption, sliding backpressure delays, automatic refills, and quota limits.
+      - *Created exhaustive test suite in `ThrottlableRecipeTest` covering initial capacities, token consumptions, rate-limit rejections, and adaptive token refills over advanced timelines.*
