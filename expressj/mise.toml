@@ -1,3 +1,15 @@
 [tools]
 java = "zulu-21.42.19"
 gradle = "8.10.2"
+
+[tasks.test]
+run = "./gradlew test"
+description = "Run all unit and integration tests"
+
+[tasks.coverage]
+run = "./gradlew jacocoTestReport"
+description = "Execute tests and generate JaCoCo coverage reports"
+
+[tasks.coverage-clean]
+run = "./gradlew clean test"
+description = "Clean build directories and execute tests from scratch"
