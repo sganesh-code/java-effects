@@ -33,7 +33,7 @@ jobs:
 
       - name: Upload to Sonatype Central Portal
         run: |
-          echo "${{ secrets.OSSRH_USERNAME }}:${{ secrets.OSSRH_PASSWORD }}" | base64 > auth.txt
+          echo "${{ secrets.MAVEN_USERNAME }}:${{ secrets.MAVEN_PASSWORD }}" | base64 > auth.txt
           curl --request POST \
             --verbose \
             --fail \
