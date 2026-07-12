@@ -105,7 +105,7 @@ The following tickets break down the implementation of the next set of reusable 
 
 ---
 
-- [ ] **🎟️ [TICKET-004]: Implement Claimable Collaboration Recipe**
+- [x] **🎟️ [TICKET-004]: Implement Claimable Collaboration Recipe**
   - **Description:** Implement a generic `Claimable` collaboration recipe that structures the process of asserting a dispute, request, or factual claim, managing multi-step review, verification, and final acceptance/denial actions.
   - **Scope:**
     - **In scope:**
@@ -116,12 +116,18 @@ The following tickets break down the implementation of the next set of reusable 
     - **Out of scope:**
       - Direct storage of raw large files/PDFs (only metadata links are managed), physical document verification, or electronic signature integrations.
   - **Implementation Tasks:**
-    - [ ] Create package `io.effects.recipes.claimable` and sub-package `models`.
-    - [ ] Define claim event types: `ClaimableEvent<ID>`, `ClaimFiled<ID>`, `ClaimUnderReview<ID>`, `ClaimAccepted<ID>`, `ClaimDenied<ID>`, `ClaimDisputed<ID>`.
-    - [ ] Define behavioral request interface `ClaimableRequest<ID, V, C>` for assessing submitted evidence.
-    - [ ] Implement `ClaimLedger<ID, V, C>` aggregate root representing reviews chronology, verification state, and decision logs.
-    - [ ] Build `ClaimableProcess<ID, V, C>` extending `Recipe` and leveraging `ProcessCoordinator`.
-    - [ ] Add unit tests under `expressj/core/src/test/java/io/effects/recipes/claimable/` verifying:
+    - [x] Create package `io.effects.recipes.claimable` and sub-package `models`.
+      - *Created package directories and files under `io.effects.recipes.claimable` and `models`.*
+    - [x] Define claim event types: `ClaimableEvent<ID>`, `ClaimFiled<ID>`, `ClaimUnderReview<ID>`, `ClaimAccepted<ID>`, `ClaimDenied<ID>`, `ClaimDisputed<ID>`.
+      - *Implemented the generic `ClaimableEvent` contract, `ClaimStep` record, and concrete event types `ClaimFiled`, `ClaimUnderReview`, `ClaimAccepted`, `ClaimDenied`, and `ClaimDisputed`.*
+    - [x] Define behavioral request interface `ClaimableRequest<ID, V, C>` for assessing submitted evidence.
+      - *Created the getter-free behavioral interface to evaluate claim filing, review transitions, accept/deny decisions, and reopening disputes.*
+    - [x] Implement `ClaimLedger<ID, V, C>` aggregate root representing reviews chronology, verification state, and decision logs.
+      - *Implemented the non-anemic thread-safe `ClaimLedger` aggregate root with synchronized transition validations and history retention.*
+    - [x] Build `ClaimableProcess<ID, V, C>` extending `Recipe` and leveraging `ProcessCoordinator`.
+      - *Created the monadic `ClaimableProcess` coordinator implementing `Recipe` and leveraging `ProcessCoordinator` inside standard functional `IO` shell.*
+    - [x] Add unit tests under `expressj/core/src/test/java/io/effects/recipes/claimable/` verifying:
       - Direct accept/deny paths.
       - Dispute and re-evaluation flows.
       - Evidence-based validator constraints.
+      - *Created complete suite of tests in `ClaimableRecipeTest` covering direct filing/reviews/accepts, role-based MD validation rules on high-amount claims, and multi-stage denial dispute and re-evaluations.*
